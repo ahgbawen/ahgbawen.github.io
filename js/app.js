@@ -17,7 +17,7 @@ function showAuth(msg) {
     '<main class="authm"><div class="acard"><img class="amark" src="assets/logo.png" alt=""><div class="atabs"><button data-at="in" class="on">Masuk</button><button data-at="up">Daftar Akun</button><i></i></div>' +
     '<div class="abody"></div>' +
     '<a class="ahelp" target="_blank" rel="noopener" href="' + esc(helpLink()) + '">' + ic('wa') + '<span>Butuh bantuan? Hubungi admin <b>+62 822-9977-4825</b></span></a></div>' +
-    '<p class="acopy">&copy; ' + new Date().getFullYear() + ' ' + PT + '</p></main></div>';
+    '<a class="aguide" href="Guide.pdf" download="Guide.pdf">' + ic('file') + 'Unduh Panduan Penggunaan (PDF)</a><p class="acopy">&copy; ' + new Date().getFullYear() + ' ' + PT + '</p></main></div>';
   const body = $('.abody', app);
   function draw(t) {
     $$('[data-at]', app).forEach(b => b.classList.toggle('on', b.dataset.at === t));
@@ -87,14 +87,14 @@ function startApp(fresh) {
     '<aside class="side"><a class="slogo" href="#/"><img src="assets/logo.png" alt="PT. Armada Hada Graha"><div><b>Basecamp Bawen</b><span>' + PT + '</span></div></a>' +
     '<nav class="snav"><a href="#/" data-r="">' + ic('home') + '<span>Beranda</span></a><div class="sgrp">Kartu Operasional</div>' +
     ORDER.map((k, i) => '<a href="#/' + k + '" data-r="' + k + '">' + ic(MODS[k].icon) + '<span>' + esc(MODS[k].title) + '</span><em>' + String(i + 1).padStart(2, '0') + '</em></a>').join('') +
-    '</nav><a class="shelp" target="_blank" rel="noopener" href="' + esc(helpLink()) + '">' + ic('wa') + '<div><b>Bantuan Admin</b><span>+62 822-9977-4825</span></div></a></aside>' +
+    '</nav><a class="shelp guide" href="Guide.pdf" download="Guide.pdf">' + ic('file') + '<div><b>Panduan Penggunaan</b><span>Unduh Guide.pdf</span></div></a><a class="shelp" target="_blank" rel="noopener" href="' + esc(helpLink()) + '">' + ic('wa') + '<div><b>Bantuan Admin</b><span>+62 822-9977-4825</span></div></a></aside>' +
     '<div class="scrim"></div>' +
     '<div class="mainw"><header class="top"><button class="ibtn menu" aria-label="Menu">' + ic('menu') + '</button><div class="crumb"></div>' +
     '<div class="tright"><span class="net ok" id="net"><i></i><span>Tersinkron</span></span>' +
     '<a class="ibtn" target="_blank" rel="noopener" title="Bantuan admin via WhatsApp" href="' + esc(helpLink()) + '">' + ic('help') + '</a>' +
     '<div class="umenu"><button class="ubtn"><span class="av">' + esc(initials(S.user.name)) + '</span><span class="un"><b>' + esc(S.user.name) + '</b><small>' + esc(S.user.jabatan || (S.user.role === 'admin' ? 'Administrator' : 'Pengguna')) + '</small></span>' + ic('down') + '</button>' +
     '<div class="udrop"><a href="#/profil">' + ic('user') + 'Profil & kata sandi</a>' + (S.user.role === 'admin' ? '<a href="#/pengguna">' + ic('users') + 'Kelola pengguna</a>' : '') +
-    '<a target="_blank" rel="noopener" href="' + esc(helpLink()) + '">' + ic('wa') + 'Hubungi admin</a><button data-logout>' + ic('logout') + 'Keluar</button></div></div></div></header>' +
+    '<a href="Guide.pdf" download="Guide.pdf">' + ic('file') + 'Unduh panduan (PDF)</a><a target="_blank" rel="noopener" href="' + esc(helpLink()) + '">' + ic('wa') + 'Hubungi admin</a><button data-logout>' + ic('logout') + 'Keluar</button></div></div></div></header>' +
     '<main id="main"></main></div>';
   $('.menu', app).onclick = () => document.body.classList.toggle('drawer');
   $('.scrim', app).onclick = () => document.body.classList.remove('drawer');

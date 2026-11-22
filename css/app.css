@@ -96,6 +96,9 @@ h1, h2, h3, h4 { margin: 0; letter-spacing: -.01em; }
 .ahelp { display: flex; align-items: center; gap: 10px; margin-top: 18px; padding: 12px 14px; border-radius: 11px; background: var(--green-soft); color: #145c3a; font-size: 13px; transition: background var(--t); }
 .ahelp:hover { background: #d9eee2; }
 .ahelp .ic { color: #1d7a4f; }
+.aguide { display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; font-size: 13px; font-weight: 600; color: var(--blue); }
+.aguide:hover { color: var(--navy); }
+.shelp.guide { margin-bottom: 0; } .shelp.guide .ic { color: #9fc2ef; }
 .acopy { margin-top: 18px; font-size: 12px; color: var(--muted); }
 
 /* ---------- shell ---------- */
