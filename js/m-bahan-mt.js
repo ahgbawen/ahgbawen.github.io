@@ -120,13 +120,13 @@ MODS.mt = {
           '<section class="card">' + table([
             { t: 'Tanggal', f: m => tgl(m.tgl) }, { t: 'Unit', f: m => unitChip(m.unit), raw: true }, { t: 'Alat', f: m => '<b>' + esc(m.alat) + '</b><small>' + esc(m.jenis || '') + '</small>', raw: true },
             { t: 'Kerusakan / pekerjaan', f: m => m.kerusakan, cls: 'wrap' },
-            { t: 'Estimasi', f: m => m.estHari ? '<b class="' + (mtLate(m) ? 't-bad' : '') + '">' + num(m.estHari) + ' hari</b><small>target ' + tgl(addDays(m.tgl, Math.ceil(+m.estHari))) + (mtLate(m) ? ' · lewat' : '') + '</small>' : '-', raw: true },
+            { t: 'Estimasi', f: m => inJadwal(m) || progKerja(m) ? '<b class="' + (mtLate(m) ? 't-bad' : '') + '">' + esc(jdEst(m)) + '</b><small>' + (m.jadwalMulai ? 'target ' + tgl(jdTarget(m)) + (mtLate(m) ? ' · lewat' : '') : 'setelah material datang') + '</small>' : m.estHari ? '<b class="' + (mtLate(m) ? 't-bad' : '') + '">' + num(m.estHari) + ' hari</b><small>target ' + tgl(addDays(m.tgl, Math.ceil(+m.estHari))) + (mtLate(m) ? ' · lewat' : '') + '</small>' : '-', raw: true },
             { t: 'Material', f: m => (m.mat || []).filter(x => x.nama).map(x => x.nama + ' ' + num(x.qty) + ' ' + (x.sat || '')).join(', ') || '-', cls: 'wrap' },
             { t: 'BPPB', f: m => m.bppb ? '<b>' + esc(m.bppb) + '</b><small>' + esc(bppbStatOf(m.bppb)) + '</small>' : '<span class="muted">Belum</span>', raw: true },
             { t: 'Status', f: m => stChip(m.status || 'Dilaporkan'), raw: true }
           ], a, { click: true, empty: s.tab === 'aktif' ? 'Tidak ada perbaikan aktif. Semua alat beroperasi normal.' : 'Belum ada riwayat maintenance.', emptyIcon: 'mt' }) + '</section>';
       },
-      bind: el => { $$('[data-row]', el).forEach(tr => tr.onclick = () => mtForm(get(tr.dataset.row.split(':')[0]))); $$('[data-prog]', el).forEach(b => b.onclick = () => mtForm(null, { program: b.dataset.prog, unit: b.dataset.u, jenis: 'Perbaikan', status: 'Dalam Perbaikan' })); }
+      bind: el => { $$('[data-row]', el).forEach(tr => tr.onclick = () => mtForm(get(tr.dataset.row.split(':')[0]))); $$('[data-prog]', el).forEach(b => b.onclick = () => mtForm(null, { program: b.dataset.prog, unit: b.dataset.u, jenis: 'Perbaikan', status: 'Dalam Perbaikan' })); $$('[data-jmulai]', el).forEach(b => b.onclick = () => jadwalMulaiDialog(b.dataset.jmulai)); }
     });
   },
   summary() { const a = all('mt').filter(m => m.status !== 'Selesai'); const l = a.filter(mtLate).length; return { main: a.length + ' perbaikan aktif', sub: l ? l + ' lewat estimasi' : 'Tidak ada yang terlambat', tone: l ? 'warn' : '' }; }
@@ -137,7 +137,7 @@ function programs(s) {
   return [...g.entries()].map(([nama, list]) => {
     const mats = []; list.forEach(m => (m.mat || []).forEach(i => mats.push(Object.assign({ m, st: itemSt(Object.assign({ real: 0 }, i)) }, i))));
     const kerja = list.filter(m => !(m.mat || []).length);
-    return { nama, unit: list[0].unit, list, mats, kerja, rab: sum(mats, i => (+i.qty || 0) * (+i.harga || 0)), selesai: kerja.filter(m => m.status === 'Selesai').length };
+    return { nama, unit: list[0].unit, list, mats, kerja, lain: kerja.filter(m => !inJadwal(m)), rab: sum(mats, i => (+i.qty || 0) * (+i.harga || 0)), selesai: kerja.filter(m => m.status === 'Selesai').length };
   }).sort((a, b) => UNITS.indexOf(a.unit) - UNITS.indexOf(b.unit));
 }
 function programHtml(s) {
@@ -148,7 +148,8 @@ function programHtml(s) {
       const st = t => p.mats.filter(i => i.st === t);
       return '<section class="card"><div class="chead"><div>' + unitChip(p.unit) + '<h3>' + esc(p.nama) + '</h3></div><div class="cmeta">RAB ' + rp(p.rab) + ' · ' + p.mats.length + ' item material · ' + p.kerja.length + ' pekerjaan</div></div>' +
         '<div class="buaso">' + ['Belum ter PO', 'Sudah PO, belum terbayar', 'Datang, belum terbayar', 'Diterima'].map(t => '<div><span>' + t + '</span><b>' + st(t).length + ' item</b><small>' + rp(sum(st(t), i => (+i.qty || 0) * (+i.harga || 0))) + '</small></div>').join('') + '</div>' +
-        (p.kerja.length ? '<h4 class="sub">Pekerjaan perbaikan</h4>' + table([{ t: 'No', f: m => m.no, cls: 'c' }, { t: 'Pekerjaan', f: m => m.kerusakan, cls: 'strong wrap' }, { t: 'Alat', f: m => m.alat }, { t: 'PIC', f: m => m.pic || '-' }, { t: 'Estimasi', f: m => m.estHari ? num(m.estHari) + ' hari' : '-' }, { t: 'Status', f: m => stChip(m.status || 'Dilaporkan'), raw: true }], p.kerja.map((m, i) => Object.assign({ no: i + 1 }, m)), { click: true }) : '') +
+        progJadwalHtml(p) +
+        (p.lain.length ? '<h4 class="sub">' + (progJadwal(p) ? 'Pekerjaan perbaikan lainnya' : 'Pekerjaan perbaikan') + '</h4>' + table([{ t: 'No', f: m => m.no, cls: 'c' }, { t: 'Pekerjaan', f: m => m.kerusakan, cls: 'strong wrap' }, { t: 'Alat', f: m => m.alat }, { t: 'PIC', f: m => m.pic || '-' }, { t: 'Estimasi', f: m => (m.estHari ? '± ' + num(m.estHari) + ' hari' : '-') + (m.jadwalMulai ? ' · target ' + tgl(jdTarget(m)) : '') }, { t: 'Status', f: m => stChip(m.status || 'Dilaporkan'), raw: true }], p.lain.map((m, i) => Object.assign({ no: i + 1 }, m)), { click: true }) : '') +
         (p.mats.length ? '<h4 class="sub">RAB material & sparepart</h4>' + table([{ t: 'No', f: i => i.no, cls: 'c' }, { t: 'Uraian barang', f: i => i.nama, cls: 'strong' }, { t: 'Qty', f: i => num(i.qty) + ' ' + (i.sat || ''), num: true }, { t: 'Harga satuan', f: i => rp(i.harga), num: true }, { t: 'Total', f: i => rp((+i.qty || 0) * (+i.harga || 0)), num: true }, { t: 'PO', f: i => i.po || '-' }, { t: 'Supplier', f: i => i.supp || '-' }, { t: 'Status', f: i => chip(i.st, itemTone(i.st)), raw: true }, { t: 'Keterangan', f: i => i.ket || '-', cls: 'wrap muted' }], p.mats.map((i, k) => Object.assign({ no: k + 1, id: i.m.id + ':' + k }, i)), { click: true }) : '') +
         '<div class="cfoot"><button class="btn ghost sm" data-prog="' + esc(p.nama) + '" data-u="' + esc(p.unit) + '">' + ic('plus') + 'Tambah pekerjaan ke program ini</button></div></section>';
     }).join('');
@@ -161,17 +162,103 @@ async function programReport(s) {
   R.table(['No', 'Program Perbaikan', 'Unit', 'Item Material', 'Pekerjaan', 'Nilai RAB'], ps.map((p, i) => [i + 1, p.nama, p.unit, cellR(String(p.mats.length)), cellR(String(p.kerja.length)), cellR(R_(p.rab))]), { foot: ['', 'Total', '', '', '', cellR(R_(sum(ps, 'rab')))] });
   ps.forEach(p => {
     R.h2(p.nama, 'RAB Rp ' + R_(p.rab));
-    if (p.kerja.length) R.table(['No', 'Pekerjaan Perbaikan', 'Alat', 'PIC', 'Status'], p.kerja.map((m, i) => [i + 1, m.kerusakan, m.alat, m.pic || '-', m.status]), { fs: 7.4 });
+    progJadwalPdf(R, p);
+    if (p.lain.length) R.table(['No', 'Pekerjaan Perbaikan', 'Alat', 'PIC', 'Estimasi', 'Status'], p.lain.map((m, i) => [i + 1, m.kerusakan, m.alat, m.pic || '-', m.estHari ? '± ' + N_(m.estHari) + ' hari' : '-', m.status]), { fs: 7.4 });
     if (p.mats.length) R.table(['No', 'Uraian Barang', 'Qty', 'Sat', 'Harga Satuan', 'Total', 'PO', 'Supplier', 'Status', 'Keterangan'], p.mats.map((i, k) => [k + 1, i.nama, cellR(N_(i.qty)), i.sat || '', cellR(R_(i.harga)), cellR(R_((+i.qty || 0) * (+i.harga || 0))), i.po || '-', i.supp || '-', i.st, i.ket || '-']), { fs: 7, foot: ['', 'Harga Total', '', '', '', cellR(R_(p.rab)), '', '', '', ''] });
   });
   R.sign([['Dibuat oleh,', S.user.name], ['Kepala Mekanik,', ''], ['Kepala Basecamp,', '']]);
   await R.save();
 }
-const mtLate = m => m.status !== 'Selesai' && m.estHari && addDays(m.tgl, Math.ceil(+m.estHari)) < today();
+const mtLate = m => { if (m.status === 'Selesai') return false; if (inJadwal(m) || progKerja(m)) { const t = jdTarget(m); return !!t && t < today(); } return !!(m.estHari && addDays(m.tgl, Math.ceil(+m.estHari)) < today()); };
+
+/* ---------- jadwal program perbaikan (hari ke-1..N dihitung dari tanggal mulai / material datang) ---------- */
+const jdDays = m => [...new Set((m.jadwal || []).map(Number).filter(n => n > 0))].sort((a, b) => a - b);
+const progKerja = m => !!(m.program && !(m.mat || []).length);
+const inJadwal = m => !!(jdDays(m).length || m.jadwalKet || (m.trial && +m.urut));
+function jdParse(t) {
+  const s = new Set();
+  String(t || '').split(/[,;\s]+/).forEach(x => { const r = x.match(/^(\d+)(?:-(\d+))?$/); if (!r) return; const a = +r[1], b = +(r[2] || r[1]); for (let i = Math.min(a, b); i <= Math.max(a, b) && i <= 366; i++) if (i > 0) s.add(i); });
+  return [...s].sort((a, b) => a - b);
+}
+function jdText(arr) {
+  const d = jdDays({ jadwal: arr }), out = [];
+  for (let i = 0; i < d.length;) { let j = i; while (j + 1 < d.length && d[j + 1] === d[j] + 1) j++; out.push(i === j ? String(d[i]) : d[i] + '-' + d[j]); i = j + 1; }
+  return out.join(', ');
+}
+function jdTarget(m) { if (!m.jadwalMulai) return ''; const d = jdDays(m); return d.length ? addDays(m.jadwalMulai, d[d.length - 1] - 1) : addDays(m.jadwalMulai, Math.ceil(+m.estHari || 0)); }
+const jdEst = m => jdDays(m).length ? 'Hari ke-' + jdText(m.jadwal) + ' (' + jdDays(m).length + ' hari)' : (m.jadwalKet || (m.estHari ? '± ' + num(m.estHari) + ' hari' : '-'));
+function progJadwal(p) {
+  const rows = p.list.filter(inJadwal).sort((a, b) => (+a.urut || 999) - (+b.urut || 999) || String(a.kerusakan).localeCompare(String(b.kerusakan)));
+  if (!rows.length) return null;
+  const N = Math.max(16, ...rows.map(m => { const d = jdDays(m); return d.length ? d[d.length - 1] : 0; }));
+  const work = rows.filter(m => !m.trial), tot = sum(work, m => jdDays(m).length);
+  const prog = []; let c = 0;
+  for (let i = 1; i <= N; i++) { work.forEach(m => { if (jdDays(m).includes(i)) c++; }); prog.push(tot ? c / tot : 0); }
+  const real = tot ? sum(work.filter(m => m.status === 'Selesai'), m => jdDays(m).length) / tot : 0;
+  return { rows, N, prog, real, mulai: (rows.find(m => m.jadwalMulai) || {}).jadwalMulai || '', nb: (rows.find(m => m.jadwalNB) || {}).jadwalNB || '' };
+}
+const jdPct = v => Math.round(v * 100) + '%';
+const jdDm = s => s.slice(8, 10) + '/' + s.slice(5, 7);
+function progJadwalHtml(p) {
+  const J = progJadwal(p); if (!J) return '';
+  const days = Array.from({ length: J.N }, (_, i) => i + 1);
+  let skip = 0;
+  const body = J.rows.map((m, ri) => {
+    const d = new Set(jdDays(m));
+    let cells;
+    if (!d.size && m.jadwalKet) {
+      if (skip) { skip--; cells = ''; }
+      else { let k = ri + 1; while (k < J.rows.length && !jdDays(J.rows[k]).length && J.rows[k].jadwalKet === m.jadwalKet) k++; skip = k - ri - 1; cells = '<td class="gk" colspan="' + J.N + '" rowspan="' + (k - ri) + '">' + esc(m.jadwalKet) + '</td>'; }
+    } else cells = days.map(i => d.has(i) ? '<td class="gd' + (m.trial ? ' tr' : '') + '">' + (m.trial ? '' : '1') + '</td>' : '<td class="g0"></td>').join('');
+    return '<tr class="click' + (m.status === 'Selesai' ? ' done' : '') + '" data-row="' + esc(m.id) + '"><td class="c">' + (ri + 1) + '</td><td class="wrap strong">' + esc(m.kerusakan) + '</td><td>' + esc(m.tenaga || m.pic || '-') + '</td>' + cells + '<td>' + stChip(m.status || 'Dilaporkan') + '</td></tr>';
+  }).join('');
+  const head = '<thead><tr><th class="c">No</th><th>Pekerjaan</th><th>Tenaga</th>' + days.map(i => '<th class="gh">' + i + (J.mulai ? '<small>' + jdDm(addDays(J.mulai, i - 1)) + '</small>' : '') + '</th>').join('') + '<th>Status</th></tr></thead>';
+  const foot = '<tfoot><tr><td></td><td colspan="2">Progress rencana</td>' + J.prog.map(v => '<td class="gp">' + jdPct(v) + '</td>').join('') + '<td></td></tr></tfoot>';
+  return '<h4 class="sub">Jadwal perbaikan (hari ke-)</h4>' +
+    '<div class="note">' + (J.mulai ? 'Hari ke-1 = <b>' + tgl(J.mulai) + '</b> · target selesai <b>' + tgl(addDays(J.mulai, J.N - 1)) + '</b>' : 'Tanggal mulai belum ditentukan') + ' · ' + esc(J.nb || 'Estimasi setelah material datang.') + ' · Realisasi <b>' + jdPct(J.real) + '</b></div>' +
+    '<div class="tbl gantt"><table>' + head + '<tbody>' + body + '</tbody>' + foot + '</table></div>' + jdCurve(J) +
+    '<div class="cfoot"><button class="btn ghost sm" data-jmulai="' + esc(p.nama) + '">' + ic('cal') + (J.mulai ? 'Ubah tanggal mulai jadwal' : 'Atur tanggal mulai (material datang)') + '</button></div>';
+}
+function jdCurve(J) {
+  const cw = 36, W = J.N * cw + 40, H = 130, x = i => 36 + i * cw, y = v => 112 - v * 100;
+  const pts = ['36,' + y(0)].concat(J.prog.map((v, i) => x(i + 1).toFixed(1) + ',' + y(v).toFixed(1))).join(' ');
+  return '<div class="scurve"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMinYMid meet" role="img" aria-label="Kurva S rencana">' +
+    [0, .5, 1].map(v => '<line x1="36" x2="' + x(J.N) + '" y1="' + y(v) + '" y2="' + y(v) + '" class="gl"/><text x="30" y="' + (y(v) + 3) + '" text-anchor="end">' + jdPct(v) + '</text>').join('') +
+    J.prog.map((v, i) => '<text x="' + x(i + 1) + '" y="126" text-anchor="middle">' + (i + 1) + '</text>').join('') +
+    '<polyline points="' + pts + '" class="ln"/>' + J.prog.map((v, i) => '<circle cx="' + x(i + 1) + '" cy="' + y(v) + '" r="2.6" class="pt"/>').join('') +
+    (J.real ? '<line x1="36" x2="' + x(J.N) + '" y1="' + y(J.real) + '" y2="' + y(J.real) + '" class="rl"/><text x="' + (x(J.N) - 2) + '" y="' + (y(J.real) - 4) + '" text-anchor="end" class="rt">realisasi ' + jdPct(J.real) + '</text>' : '') +
+    '</svg><small>Kurva S rencana (hari ke-)</small></div>';
+}
+async function jadwalMulaiDialog(prog) {
+  const rows = all('mt').filter(m => m.program === prog && (inJadwal(m) || progKerja(m)));
+  const cur = (rows.find(m => m.jadwalMulai) || {}).jadwalMulai || '';
+  const v = await promptBox('Tanggal mulai jadwal', [{ k: 'tgl', label: 'Hari ke-1 (material datang)', type: 'date', help: 'Kosongkan bila belum pasti' }], { tgl: cur || today() });
+  if (!v) return;
+  rows.forEach(m => save('mt', mtData(Object.assign({}, m, { jadwalMulai: v.tgl || '' })), m.id));
+  toast(v.tgl ? 'Jadwal ' + prog + ' mulai ' + tgl(v.tgl) : 'Tanggal mulai dikosongkan');
+}
+function progJadwalPdf(R, p) {
+  const J = progJadwal(p); if (!J) return;
+  const days = Array.from({ length: J.N }, (_, i) => i + 1), GRAY = [196, 201, 208], LGRAY = [222, 226, 231];
+  let skip = 0;
+  const body = J.rows.map((m, ri) => {
+    const d = new Set(jdDays(m)), r = [String(ri + 1), m.kerusakan, m.tenaga || m.pic || '-'];
+    if (!d.size && m.jadwalKet) {
+      if (skip) skip--;
+      else { let k = ri + 1; while (k < J.rows.length && !jdDays(J.rows[k]).length && J.rows[k].jadwalKet === m.jadwalKet) k++; skip = k - ri - 1; r.push({ content: m.jadwalKet, colSpan: J.N, rowSpan: k - ri, styles: { halign: 'center', fontStyle: 'italic', fillColor: [255, 255, 255] } }); }
+    } else days.forEach(i => r.push(d.has(i) ? { content: m.trial ? '' : '1', styles: { halign: 'center', fillColor: m.trial ? LGRAY : GRAY } } : ''));
+    return r;
+  });
+  R.para('Jadwal perbaikan (hari ke-): ' + (J.mulai ? 'hari ke-1 = ' + tgl(J.mulai, true) + ', target selesai ' + tgl(addDays(J.mulai, J.N - 1), true) : 'tanggal mulai belum ditentukan') + '. ' + (J.nb || 'Estimasi setelah material datang.') + ' Realisasi ' + jdPct(J.real) + '.', 8);
+  const cs = { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 62 }, 2: { cellWidth: 34 } };
+  days.forEach(i => cs[i + 2] = { cellWidth: Math.min(9.5, 150 / J.N), halign: 'center' });
+  R.table(['No', 'Pekerjaan', 'Tenaga'].concat(days.map(i => J.mulai ? i + '\n' + jdDm(addDays(J.mulai, i - 1)) : String(i))), body, { fs: 6.8, cs, foot: ['', 'Progress rencana', ''].concat(J.prog.map(v => ({ content: jdPct(v), styles: { halign: 'center' } }))) });
+}
 function bppbStatOf(no) { const b = all('bppb').find(x => x.no === no); return b ? bppbStat(b).st : 'tidak ditemukan'; }
 function mtRows(s) { return byDateDesc(all('mt').filter(m => (s.tab !== 'aktif' || m.status !== 'Selesai') && (!s.unit || m.unit === s.unit) && inMonth(m.tgl, s.month) && qMatch(s.q, m.alat, m.kerusakan, m.jenis, m.bppb, m.pic))); }
 function mtForm(d, pre) {
   const v = d ? JSON.parse(JSON.stringify(d)) : Object.assign({ tgl: today(), unit: stateOf('mt', {}).unit || 'SCP', jenis: 'Perbaikan', status: 'Dilaporkan', mat: [] }, pre || {});
+  v.jadwalTxt = jdText(v.jadwal);
   openForm({
     title: d ? 'Maintenance — ' + d.alat : 'Laporkan Kerusakan / Maintenance', sub: 'Estimasi perbaikan, kebutuhan material, dan nomor BPPB', wide: true, value: v, onDelete: d ? () => remove(d.id) : null,
     extraBtn: { html: '<button type="button" class="btn ghost" data-mkb>' + ic('bppb') + 'Buat BPPB dari material</button>', bind: (f, x, m) => { $('[data-mkb]', f).onclick = () => {
@@ -195,6 +282,12 @@ function mtForm(d, pre) {
       { k: 'tindakan', label: 'Rencana tindakan', type: 'textarea', rows: 2 },
       { k: 'estHari', label: 'Estimasi lama perbaikan', type: 'num', suffix: 'hari' },
       { k: 'pic', label: 'Mekanik / PIC' },
+      { k: 'tenaga', label: 'Tenaga (jadwal)', ph: 'mis. pak alip & tim', show: x => !!x.program },
+      { k: 'jadwalTxt', label: 'Jadwal hari ke-', ph: 'mis. 1-3 atau 7, 8', help: 'Dihitung dari tanggal mulai program (setelah material datang)', show: x => !!x.program },
+      { k: 'urut', label: 'Urutan di jadwal', type: 'num', show: x => !!x.program },
+      { k: 'jadwalKet', label: 'Keterangan jadwal (bila tanpa hari)', ph: 'mis. Estimasi 2-3 minggu (subkon)', show: x => !!x.program },
+      { k: 'jadwalMulai', label: 'Tanggal mulai jadwal (hari ke-1)', type: 'date', show: x => !!x.program },
+      { k: 'trial', type: 'check', text: 'Trial produksi (tidak dihitung dalam progress)', show: x => !!x.program },
       { k: 'mat', label: 'Material / sparepart yang harus dibeli', type: 'items', newRow: () => ({ qty: 1 }), cols: [
         { k: 'nama', label: 'Nama material', type: 'list', opts: () => allMatNames().map(m => m.nama), w: '42%', onChange: r => { const mi = allMatNames().find(m => m.nama === r.nama); if (mi && !r.sat) r.sat = mi.sat; const lp = latestPrice(r.nama); if (lp && !r.harga) r.harga = lp.harga; } },
         { k: 'qty', label: 'Jumlah', num: true }, { k: 'sat', label: 'Satuan', type: 'list', opts: SATUAN }, { k: 'harga', label: 'Harga satuan', num: true }, { k: 'po', label: 'No PO' }, { k: 'supp', label: 'Supplier' }, { k: 'ket', label: 'Keterangan' }] },
@@ -207,7 +300,8 @@ function mtForm(d, pre) {
     onSave: x => { save('mt', mtData(x), d && d.id); toast('Data maintenance tersimpan'); }
   });
 }
-function mtData(x) { return { tgl: x.tgl, unit: x.unit, alat: x.alat, jenis: x.jenis, kerusakan: x.kerusakan || '', tindakan: x.tindakan || '', estHari: +x.estHari || 0, pic: x.pic || '', mat: (x.mat || []).filter(i => i.nama).map(i => ({ nama: i.nama, qty: +i.qty || 0, sat: i.sat || '', harga: +i.harga || 0, po: i.po || '', supp: i.supp || '', ket: i.ket || '' })), program: x.program || '', bppb: x.bppb || '', status: x.status, selesai: x.status === 'Selesai' ? x.selesai || today() : '', biaya: +x.biaya || 0, ket: x.ket || '' }; }
+function mtData(x) { return { tgl: x.tgl, unit: x.unit, alat: x.alat, jenis: x.jenis, kerusakan: x.kerusakan || '', tindakan: x.tindakan || '', estHari: +x.estHari || 0, pic: x.pic || '', mat: (x.mat || []).filter(i => i.nama).map(i => ({ nama: i.nama, qty: +i.qty || 0, sat: i.sat || '', harga: +i.harga || 0, po: i.po || '', supp: i.supp || '', ket: i.ket || '' })), program: x.program || '', bppb: x.bppb || '', status: x.status, selesai: x.status === 'Selesai' ? x.selesai || today() : '', biaya: +x.biaya || 0, ket: x.ket || '',
+  tenaga: x.tenaga || '', jadwal: x.jadwalTxt != null ? jdParse(x.jadwalTxt) : jdDays(x), urut: +x.urut || 0, jadwalKet: x.jadwalKet || '', jadwalMulai: x.jadwalMulai || '', jadwalNB: x.jadwalNB || '', trial: !!x.trial }; }
 async function mtReport(s) {
   const rows = mtRows(s);
   const R = await pdfReport({ title: 'Laporan Maintenance Alat', sub: (s.unit ? UNIT_NAME[s.unit] : 'Seluruh unit') + ' · ' + (s.tab === 'aktif' ? 'Perbaikan aktif' : 'Riwayat') + ' · ' + monthLabel(s.month), orient: 'l', fname: 'Laporan_Maintenance' });

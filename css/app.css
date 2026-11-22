@@ -461,3 +461,22 @@ table.sheetlike td.wrap { min-width: 160px; }
   .plkop { flex-wrap: wrap; } .ppnbadge { position: static; }
 }
 @media (max-width: 380px) { .cards { grid-template-columns: 1fr; } }
+
+/* jadwal program perbaikan (Gantt hari ke- + kurva S) */
+.gantt table { font-size: 12.5px; }
+.gantt th.gh, .gantt td.gd, .gantt td.g0, .gantt td.gp { width: 34px; min-width: 34px; padding: 7px 2px; text-align: center; border-left: 1px solid #edf1f5; }
+.gantt th.gh small { font-size: 10px; }
+.gantt td.gd { background: #c4cad2; font-weight: 700; color: var(--navy); }
+.gantt td.gd.tr { background: #dde1e7; }
+.gantt td.gk { text-align: center; white-space: normal; font-style: italic; color: var(--ink2); background: var(--surface2); border-left: 1px solid #edf1f5; }
+.gantt td.gp { font-size: 11.5px; }
+.gantt tr.done td.strong { text-decoration: line-through; color: var(--muted); }
+.scurve { margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px 6px; overflow-x: auto; }
+.scurve svg { display: block; width: 100%; min-width: 560px; height: auto; max-height: 190px; }
+.scurve text { font-size: 9px; fill: var(--muted); }
+.scurve .gl { stroke: var(--line); stroke-width: 1; }
+.scurve .ln { fill: none; stroke: var(--blue2); stroke-width: 2; }
+.scurve .pt { fill: var(--blue2); }
+.scurve .rl { stroke: #1f9d55; stroke-width: 1.2; stroke-dasharray: 4 3; }
+.scurve .rt { fill: #1f7a45; font-weight: 600; }
+.scurve small { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
