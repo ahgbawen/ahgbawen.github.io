@@ -152,46 +152,57 @@ async function orgReport() {
   const list = orgPos();
   const R = await pdfReport({ title: 'Struktur Organisasi Basecamp Bawen', sub: 'Unit Produksi AMP, CMP, SCP, PCP · per ' + tgl(today(), true), orient: 'l', fname: 'Struktur_Organisasi_Bawen' });
   const doc = R.doc, W = R.W, M = R.M;
+  if (!orgKids(list, '')[0]) { toast('Struktur belum memiliki puncak jabatan', 'err'); return; }
   const root = orgKids(list, '')[0];
   const UC = { AMP: [38, 52, 69], CMP: [31, 95, 174], SCP: [138, 90, 43], PCP: [36, 117, 107], Umum: [106, 118, 134] };
-  const box = (p, x, y, w, top) => {
-    doc.setFontSize(top ? 8 : 6.4);
-    const jl = doc.splitTextToSize(pdfClean(p.jabatan), w - 4.4).slice(0, 3);
+  // bagan digambar dengan skala yang dikecilkan bila perlu, sehingga seluruh bagan muat di satu halaman tanpa teks terpotong
+  const box = (p, x, y, w, top, sc, draw) => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize((top ? 8 : 6.4) * sc);
+    const jl = doc.splitTextToSize(pdfClean(p.jabatan), w - 4.4);
     const nm = (p.orang || []).filter(o => o.nama).map(o => o.nama);
-    const nl = nm.length ? doc.splitTextToSize(pdfClean(nm.slice(0, 4).join(', ') + (nm.length > 4 ? ' +' + (nm.length - 4) : '')), w - 4.4).slice(0, 3) : ['(belum diisi)'];
-    const lh = top ? 3.4 : 2.7, h = 2.6 + jl.length * lh + nl.length * lh + 1.6;
+    doc.setFont('helvetica', 'normal');
+    const nl = nm.length ? nm.reduce((a, t) => a.concat(doc.splitTextToSize(pdfClean(t), w - 4.4)), []) : ['(belum diisi)'];
+    const lh = (top ? 3.4 : 2.7) * sc, h = 2.6 * sc + jl.length * lh + nl.length * lh + 1.6 * sc;
+    if (!draw) return h;
     const col = top ? NAVY : UC[p.unit] || UC.Umum;
     doc.setDrawColor(...col); doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255); doc.roundedRect(x, y, w, h, 1, 1, 'FD');
     doc.setFillColor(...col); doc.rect(x, y, 1.1, h, 'F');
-    let yy = y + 2.6 + lh * 0.55;
+    let yy = y + 2.6 * sc + lh * 0.55;
     doc.setFont('helvetica', 'bold'); doc.setTextColor(...INK); jl.forEach(t => { doc.text(t, x + 2.2, yy); yy += lh; });
     doc.setFont('helvetica', nm.length ? 'normal' : 'italic'); doc.setTextColor(...(nm.length ? [31, 95, 174] : MUTED)); nl.forEach(t => { doc.text(t, x + 2.2, yy); yy += lh; });
     return h;
   };
-  let y = R.y + 1;
-  const tw = 70, th = box(root, W / 2 - tw / 2, y, tw, true);
-  const cols = orgKids(list, root.id), n = cols.length || 1, gap = 2.2, cw = (W - 2 * M - gap * (n - 1)) / n;
-  const yl = y + th + 4;
-  doc.setDrawColor(...NAVY); doc.setLineWidth(0.35); doc.line(W / 2, y + th, W / 2, yl);
-  if (n > 1) doc.line(M + cw / 2, yl, M + (n - 1) * (cw + gap) + cw / 2, yl);
-  let maxY = yl;
-  cols.forEach((c, i) => {
-    const x = M + i * (cw + gap);
-    doc.setDrawColor(...NAVY); doc.line(x + cw / 2, yl, x + cw / 2, yl + 3);
-    let cy = yl + 3; const h = box(c, x, cy, cw); cy += h + 2.4;
-    const walk = (pid, ind) => orgKids(list, pid).forEach(k => {
-      const bx = x + ind; doc.setDrawColor(170, 180, 192); doc.setLineWidth(0.25); doc.line(bx - 1.6, cy - 2.4, bx - 1.6, cy + 2); doc.line(bx - 1.6, cy + 2, bx, cy + 2);
-      const hh = box(k, bx, cy, cw - ind); cy += hh + 1.6; walk(k.id, ind + 2.5);
+  const chart = (sc, draw) => {
+    const y = R.y + 1;
+    const tw = 70, th = box(root, W / 2 - tw / 2, y, tw, true, sc, draw);
+    const cols = orgKids(list, root.id), n = cols.length || 1, gap = 2.2, cw = (W - 2 * M - gap * (n - 1)) / n;
+    const yl = y + th + 4 * sc;
+    if (draw) { doc.setDrawColor(...NAVY); doc.setLineWidth(0.35); doc.line(W / 2, y + th, W / 2, yl); if (n > 1) doc.line(M + cw / 2, yl, M + (n - 1) * (cw + gap) + cw / 2, yl); }
+    let maxY = yl;
+    cols.forEach((c, i) => {
+      const x = M + i * (cw + gap);
+      if (draw) { doc.setDrawColor(...NAVY); doc.setLineWidth(0.35); doc.line(x + cw / 2, yl, x + cw / 2, yl + 3 * sc); }
+      let cy = yl + 3 * sc; const h = box(c, x, cy, cw, false, sc, draw); cy += h + 2.4 * sc;
+      const walk = (pid, ind) => orgKids(list, pid).forEach(k => {
+        const bx = x + ind;
+        if (draw) { doc.setDrawColor(170, 180, 192); doc.setLineWidth(0.25); doc.line(bx - 1.6, cy - 2.4 * sc, bx - 1.6, cy + 2 * sc); doc.line(bx - 1.6, cy + 2 * sc, bx, cy + 2 * sc); }
+        const hh = box(k, bx, cy, cw - ind, false, sc, draw); cy += hh + 1.6 * sc; walk(k.id, ind + 2.5);
+      });
+      walk(c.id, 2.5);
+      maxY = Math.max(maxY, cy);
     });
-    walk(c.id, 2.5);
-    maxY = Math.max(maxY, cy);
-  });
+    return maxY;
+  };
+  const limit = R.H - 20;
+  let sc = 1;
+  while (sc > 0.5 && chart(sc, false) > limit) sc -= 0.05;
+  const maxY = chart(sc, true);
   R.y = maxY + 4;
   doc.addPage(); R.y = 36;
   R.h2('Daftar Jabatan, Garis Komando, Koordinasi & Personil');
   const rows = []; const walk = (id, lv) => orgKids(list, id).forEach(p => { rows.push([lv, p]); walk(p.id, lv + 1); }); walk('', 1);
   R.table(['No', 'Jabatan', 'Unit', 'Atasan Langsung', 'Koordinasi', 'Formasi', 'Nama Personil', 'Uraian Tugas'], rows.map(([lv, p], i) => [i + 1, '  '.repeat(lv - 1) + p.jabatan, p.unit || 'Umum', (orgFind(p.atasan) || {}).jabatan || '-', (p.kor || []).map(x => (orgFind(x) || {}).jabatan).filter(Boolean).join(', ') || '-', cellR(orgFill(p) + '/' + (+p.formasi || 0)), (p.orang || []).filter(o => o.nama).map(o => o.nama + (o.wa ? ' (' + waShow(o.wa) + ')' : '')).join('\n') || '-', p.tugas || '-']),
-    { fs: 6.8, cs: { 0: { halign: 'center', cellWidth: 8 }, 1: { cellWidth: 44 }, 3: { cellWidth: 36 }, 4: { cellWidth: 46 }, 6: { cellWidth: 40 }, 7: { cellWidth: 52 } } });
+    { fs: 6.8, cs: { 0: { halign: 'center', cellWidth: 8 }, 1: { cellWidth: 42 }, 3: { cellWidth: 34 }, 4: { cellWidth: 44 }, 6: { cellWidth: 40 }, 7: { cellWidth: 52 } } });
   R.sign([['Dibuat oleh,', S.user.name], ['Kepala Plant,', ''], ['Disetujui oleh,', '']]);
   await R.save();
 }

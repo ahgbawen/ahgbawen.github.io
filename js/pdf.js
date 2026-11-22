@@ -20,8 +20,8 @@ async function pdfReport({ title, sub, orient = 'p', fname }) {
   let y = TOP + 2;
   // judul halaman pertama
   doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(...NAVY);
-  doc.text(pdfClean(title).toUpperCase(), W / 2, y + 5, { align: 'center' });
-  y += 10;
+  doc.splitTextToSize(pdfClean(title).toUpperCase(), W - 2 * M).forEach((t, k) => { doc.text(t, W / 2, y + 5, { align: 'center' }); y += 6; });
+  y += 4;
   if (sub) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...MUTED); doc.splitTextToSize(pdfClean(sub), W - 2 * M).forEach(t => { doc.text(t, W / 2, y, { align: 'center' }); y += 4.2; }); }
   y += 3;
   const R = {
@@ -29,25 +29,38 @@ async function pdfReport({ title, sub, orient = 'p', fname }) {
     get y() { return y; }, set y(v) { y = v; },
     need(h) { if (y + h > H - BOT - 2) { doc.addPage(); y = TOP + 2; } },
     h2(t, note) {
-      R.need(14);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+      const nw = note ? Math.min(doc.getTextWidth(pdfClean(note)), (W - 2 * M) * 0.4) : 0;
+      const nl = note ? doc.splitTextToSize(pdfClean(note), nw + 0.5) : [];
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5);
+      const tl = doc.splitTextToSize(pdfClean(t), W - 2 * M - 3.5 - (nw ? nw + 6 : 0));
+      const hh = Math.max(tl.length * 4.6, nl.length * 3.6);
+      R.need(hh + 26); // judul tidak boleh terpisah dari kepala tabel di bawahnya
       y += 2;
-      doc.setFillColor(...NAVY); doc.rect(M, y - 3.6, 1.4, 5, 'F');
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(...NAVY); doc.text(pdfClean(t), M + 3.5, y);
-      if (note) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUTED); doc.text(pdfClean(note), W - M, y, { align: 'right' }); }
-      y += 4;
+      doc.setFillColor(...NAVY); doc.rect(M, y - 3.6, 1.4, 5 + (tl.length - 1) * 4.6, 'F');
+      doc.setTextColor(...NAVY); tl.forEach((s, i) => doc.text(s, M + 3.5, y + i * 4.6));
+      if (nl.length) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUTED); nl.forEach((s, i) => doc.text(s, W - M, y + i * 3.6, { align: 'right' })); }
+      y += hh + 0.5;
     },
     kv(pairs, cols) {
       cols = cols || Math.min(4, pairs.length);
-      const gap = 3, bw = (W - 2 * M - gap * (cols - 1)) / cols, bh = 13;
+      const gap = 3, bw = (W - 2 * M - gap * (cols - 1)) / cols;
       for (let i = 0; i < pairs.length; i += cols) {
+        const row = pairs.slice(i, i + cols).map(([k, v, tone]) => {
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); const kl = doc.splitTextToSize(pdfClean(k).toUpperCase(), bw - 6);
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(10); const vl = doc.splitTextToSize(pdfClean(v), bw - 6);
+          return { kl, vl, tone };
+        });
+        const bh = Math.max(...row.map(r => 3.4 + r.kl.length * 3 + 1.4 + r.vl.length * 4.2 + 1.6));
         R.need(bh + 3);
-        pairs.slice(i, i + cols).forEach(([k, v, tone], j) => {
+        row.forEach((r, j) => {
           const x = M + j * (bw + gap);
           doc.setDrawColor(...LINE); doc.setFillColor(247, 249, 252); doc.roundedRect(x, y, bw, bh, 1.2, 1.2, 'FD');
-          doc.setFillColor(...(tone === 'red' ? RED : NAVY)); doc.rect(x, y, 1, bh, 'F');
-          doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); doc.setTextColor(...MUTED); doc.text(pdfClean(k).toUpperCase(), x + 3.5, y + 4.6);
-          doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...(tone === 'red' ? RED : INK));
-          doc.text(doc.splitTextToSize(pdfClean(v), bw - 6)[0], x + 3.5, y + 10.2);
+          doc.setFillColor(...(r.tone === 'red' ? RED : NAVY)); doc.rect(x, y, 1, bh, 'F');
+          let yy = y + 4.6;
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); doc.setTextColor(...MUTED); r.kl.forEach(t => { doc.text(t, x + 3.5, yy); yy += 3; });
+          yy += 2.6;
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...(r.tone === 'red' ? RED : INK)); r.vl.forEach(t => { doc.text(t, x + 3.5, yy); yy += 4.2; });
         });
         y += bh + 3;
       }
@@ -76,8 +89,9 @@ async function pdfReport({ title, sub, orient = 'p', fname }) {
       y += 2;
     },
     table(head, body, o = {}) {
-      R.need(18);
+      R.need(22);
       doc.autoTable({
+        rowPageBreak: 'avoid', showHead: 'everyPage', pageBreak: 'auto', tableWidth: 'auto',
         startY: y, head: [head.map(pdfClean)], body: body.map(r => r.map(c => typeof c === 'object' && c !== null && !Array.isArray(c) ? Object.assign({}, c, { content: pdfClean(c.content) }) : pdfClean(c))),
         foot: o.foot ? [o.foot.map(c => typeof c === 'object' && c !== null ? Object.assign({}, c, { content: pdfClean(c.content) }) : pdfClean(c))] : undefined,
         showFoot: 'lastPage', theme: 'grid', margin: { left: M, right: M, top: TOP + 2, bottom: BOT + 2 },
@@ -92,19 +106,22 @@ async function pdfReport({ title, sub, orient = 'p', fname }) {
     },
     sign(list) {
       list = list || [['Dibuat oleh', S.user ? S.user.name : ''], ['Diperiksa oleh', ''], ['Disetujui oleh', '']];
-      R.need(34);
+      const cw = (W - 2 * M) / list.length, half = Math.min(22, cw / 2 - 3);
+      doc.setFontSize(8.6);
+      const rl = list.map(([role]) => doc.splitTextToSize(pdfClean(role), cw - 4));
+      const extra = (Math.max(...rl.map(r => r.length)) - 1) * 3.8;
+      R.need(36 + extra);
       y += 2;
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.6); doc.setTextColor(...INK);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(...INK);
       doc.text('Bawen, ' + pdfClean(tgl(today(), true)), W - M, y, { align: 'right' });
       y += 5;
-      const cw = (W - 2 * M) / list.length;
       list.forEach(([role, name], i) => {
         const cx = M + cw * i + cw / 2;
-        doc.setFont('helvetica', 'normal'); doc.text(pdfClean(role), cx, y, { align: 'center' });
-        doc.setDrawColor(...INK); doc.setLineWidth(0.2); doc.line(cx - 22, y + 20, cx + 22, y + 20);
-        if (name) { doc.setFont('helvetica', 'bold'); doc.text(pdfClean(name), cx, y + 18.6, { align: 'center' }); }
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.6); rl[i].forEach((t, k) => doc.text(t, cx, y + k * 3.8, { align: 'center' }));
+        doc.setDrawColor(...INK); doc.setLineWidth(0.2); doc.line(cx - half, y + 20 + extra, cx + half, y + 20 + extra);
+        if (name) { doc.setFont('helvetica', 'bold'); const nm = doc.splitTextToSize(pdfClean(name), half * 2); doc.setFontSize(nm.length > 1 ? 7.4 : 8.6); doc.text(doc.splitTextToSize(pdfClean(name), half * 2), cx, y + 18.6 + extra - (nm.length > 1 ? 3 : 0), { align: 'center' }); }
       });
-      y += 26;
+      y += 26 + extra;
     },
     async save() {
       const n = doc.getNumberOfPages();
@@ -118,10 +135,15 @@ async function pdfReport({ title, sub, orient = 'p', fname }) {
         doc.text('Basecamp Bawen  |  Unit Produksi AMP - CMP - SCP - PCP', M + lw + 4, 18);
         doc.setFontSize(7.6); doc.setTextColor(...MUTED);
         doc.text('Trust and Integrity', M + lw + 4, 22.4);
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...NAVY);
-        doc.text(pdfClean(title).toUpperCase(), W - M, 13, { align: 'right' });
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.4); doc.setTextColor(...MUTED);
-        if (sub) doc.text(doc.splitTextToSize(pdfClean(sub), 90)[0], W - M, 17.5, { align: 'right' });
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.6);
+        const leftEnd = M + lw + 4 + doc.getTextWidth('Basecamp Bawen  |  Unit Produksi AMP - CMP - SCP - PCP');
+        const rw = W - M - leftEnd - 8;
+        let fs = 8, tl;
+        doc.setFont('helvetica', 'bold');
+        do { doc.setFontSize(fs); tl = doc.splitTextToSize(pdfClean(title).toUpperCase(), rw); fs -= 0.5; } while (tl.length > 3 && fs > 5.5);
+        doc.setTextColor(...NAVY);
+        tl.forEach((t, k) => doc.text(t, W - M, 12 + k * (fs + 0.5) * 0.42, { align: 'right' }));
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...MUTED);
         doc.setDrawColor(...NAVY); doc.setLineWidth(0.8); doc.line(M, 27.5, W - M, 27.5);
         doc.setDrawColor(...RED); doc.setLineWidth(0.35); doc.line(M, 28.9, W - M, 28.9);
         doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(M, H - 11, W - M, H - 11);

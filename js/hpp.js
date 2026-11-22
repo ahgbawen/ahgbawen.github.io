@@ -186,7 +186,7 @@ function plHtml(s) {
     (h.k && h.k.asumsi ? '<div class="note">Data ' + esc(h.k.nama) + ' adalah asumsi (tidak ada di sheet RAPU-BUASO). Sesuaikan sewa, sopir, dan konsumsi BBM di Kartu HPP, tab Ongkos Gendong.</div>' : '');
   tiers.forEach((t, ti) => {
     const m = margin(t);
-    const title = (ti + 1) + '. HARGA ' + TIER[t][1].toUpperCase() + ' (+' + nf0.format(m * 100) + '%) - ' + h.sat.toUpperCase();
+    const title = (ti + 1) + '. HARGA ' + TIER[t][1].toUpperCase() + ' - ' + h.sat.toUpperCase();
     if (u === 'PCP') {
       html += '<h3 class="plh">' + esc(title) + '</h3><div class="tbl"><table class="pl"><thead><tr><th rowspan="2">No</th><th rowspan="2">Produk</th><th rowspan="2">Dimensi</th><th rowspan="2">HPP + Bunga</th><th rowspan="2">Harga BUASO</th><th rowspan="2">Harga Pasar</th><th rowspan="2" class="hl">Loco (dipakai)</th><th rowspan="2">Margin</th><th colspan="10">Terkirim (Franco on Truck)</th></tr><tr>' + zh + '</tr></thead><tbody>' +
         prods.map((p, i) => { const r = plRow(u, p.n, t, s); if (!r) return ''; const [a, b] = pcpSplit(p.n); const f = s.ppn ? 1 + params().global.ppn : 1; const lr = locoRaw(r.c, t); return '<tr><td class="c">' + (i + 1) + '</td><td>' + esc(a) + '</td><td>' + esc(b) + '</td><td class="n">' + nf0.format(r.c.hpp) + '</td><td class="n">' + nf0.format(r.c.hpp / (1 - m) * f) + '</td><td class="n">' + (pasarOf(r.c) ? nf0.format(pasarOf(r.c) * f) : '-') + '</td><td class="n hl">' + nf0.format(r.loco) + '</td><td class="n">' + pct(lr ? (lr - r.c.hpp) / lr : 0) + '</td>' + r.franco.map(x => '<td class="n">' + nf0.format(x) + '</td>').join('') + '</tr>'; }).join('') + '</tbody></table></div>';
@@ -209,7 +209,7 @@ async function plReport(s) {
   const zl = z.map((km, i) => 'Z' + (i + 1) + '\n' + (i ? z[i - 1] : 0) + '-' + km);
   const cs = {}; for (let i = 2; i < 24; i++) cs[i] = { halign: 'right' }; cs[0] = { halign: 'center', cellWidth: 7 };
   tiers.forEach((t, ti) => {
-    const m = margin(t), title = (ti + 1) + '. Harga ' + TIER[t][1] + ' (+' + nf0.format(m * 100) + '%) - ' + h.sat;
+    const m = margin(t), title = (ti + 1) + '. Harga ' + TIER[t][1] + ' - ' + h.sat;
     const prods = products(u);
     if (u === 'PCP') {
       R.h2(title, h.ppnTxt);
@@ -277,7 +277,7 @@ function hppHtml(s) {
       '<div class="tbl"><table><thead><tr><th>No</th><th>Uraian</th><th>Komponen</th><th>Satuan</th><th class="n">Koefisien</th><th class="n">Harga Satuan</th><th class="n">Jumlah</th><th>Keterangan</th></tr></thead><tbody>' +
       rows.map(l => '<tr><td class="c">' + l.no + '</td><td class="strong">' + esc(l.nama) + '</td><td class="c">' + l.komp + '</td><td>' + esc(l.sat) + '</td><td class="n">' + num4(l.koef) + '</td><td class="n">' + rp(l.harga) + '</td><td class="n">' + rp(l.biaya) + '</td><td class="muted wrap">' + esc(l.src || 'Komposisi jobmix') + '</td></tr>').join('') + tot +
       '<tr class="sub strong"><td></td><td colspan="5">HPP (COGS) = B + U + A + S + O</td><td class="n">' + rp(c.cogs) + '</td><td></td></tr><tr class="sub"><td></td><td colspan="5">Bunga modal kerja (HPP x ' + pct(params().global.bunga) + ' / 12 x ' + num(params().global.masa) + ' bulan)</td><td class="n">' + rp(c.bunga) + '</td><td></td></tr><tr class="grand"><td></td><td colspan="5">HPP + BUNGA</td><td class="n">' + rp(c.hpp) + '</td><td></td></tr></tbody></table></div></section>' +
-      '<section class="card"><div class="chead"><h3>Harga jual dari HPP ini</h3></div><div class="kpis sm">' + Object.keys(TIER).map(t => kpi(TIER[t][1] + ' (+' + nf0.format(margin(t) * 100) + '%)', rp(c.harga[t]), 'profit ' + rp(c.harga[t] - c.hpp))).join('') + '</div></section>';
+      '<section class="card"><div class="chead"><h3>Harga jual dari HPP ini</h3></div><div class="kpis sm">' + Object.keys(TIER).map(t => kpi(TIER[t][1], rp(c.harga[t]), 'profit ' + rp(c.harga[t] - c.hpp))).join('') + '</div></section>';
   }
   if (s.tab === 'param') {
     const x = params().unit[u], g = params().global, so = solarInd();

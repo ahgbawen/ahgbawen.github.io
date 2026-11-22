@@ -142,7 +142,7 @@ h1, h2, h3, h4 { margin: 0; letter-spacing: -.01em; }
 .umenu.open .udrop { opacity: 1; transform: none; pointer-events: auto; }
 .udrop a, .udrop button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border-radius: 8px; border: 0; background: none; color: var(--ink2); font-size: 13.5px; cursor: pointer; text-align: left; }
 .udrop a:hover, .udrop button:hover { background: var(--surface2); color: var(--navy); }
-#main { padding: 24px 26px 60px; max-width: 1560px; }
+#main { padding: 24px clamp(16px, 2vw, 34px) 60px; width: 100%; max-width: none; }
 #main.enter { animation: fadeUp .38s var(--ease); }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
@@ -377,8 +377,8 @@ table.sheetlike td.wrap { min-width: 160px; }
 /* ---------- modal & form ---------- */
 .mwrap { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; }
 .mback { position: absolute; inset: 0; background: rgba(14, 25, 42, .45); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); opacity: 0; transition: opacity .26s var(--ease); }
-.mdl { position: relative; width: 100%; max-width: 680px; max-height: calc(100vh - 40px); display: flex; flex-direction: column; background: var(--surface); border-radius: 16px; box-shadow: 0 30px 80px -20px rgba(10, 25, 45, .45); opacity: 0; transform: translateY(16px) scale(.985); transition: opacity .28s var(--ease), transform .32s var(--ease); }
-.mdl.wide { max-width: 1040px; } .mdl.small { max-width: 460px; }
+.mdl { position: relative; width: 100%; max-width: min(860px, 94vw); max-height: calc(100vh - 40px); display: flex; flex-direction: column; background: var(--surface); border-radius: 16px; box-shadow: 0 30px 80px -20px rgba(10, 25, 45, .45); opacity: 0; transform: translateY(16px) scale(.985); transition: opacity .28s var(--ease), transform .32s var(--ease); }
+.mdl.wide { max-width: min(1480px, 95vw); } .mdl.small { max-width: min(520px, 94vw); }
 .mwrap.in .mback { opacity: 1; } .mwrap.in .mdl { opacity: 1; transform: none; }
 .mhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px 14px; border-bottom: 1px solid var(--line); }
 .mhead h3 { font-size: 17px; } .mhead p { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); }
