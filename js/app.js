@@ -34,7 +34,8 @@ function showAuth(msg) {
       '<label>Jabatan<input name="jabatan" list="dl-jab" placeholder="mis. Admin Unit AMP"><datalist id="dl-jab"><option>Kepala Basecamp<option>Kepala Unit<option>Admin Unit<option>Admin Keuangan<option>Logistik<option>Marketing<option>Mekanik</datalist></label>' +
       '<div class="row2"><label>Kata sandi<input name="pass" type="password" autocomplete="new-password" required minlength="6" placeholder="minimal 6 karakter"></label>' +
       '<label>Ulangi kata sandi<input name="pass2" type="password" autocomplete="new-password" required></label></div>' +
-      '<button class="btn pri block" type="submit">Daftar &amp; Masuk</button></form>';
+      '<label>Kode referral<input name="ref" required autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Masukkan kode referral dari admin"></label>' +
+      '<button class="btn pri block" type="submit">Daftar &amp; Masuk</button><p class="muted sm">Belum punya kode referral? Hubungi admin melalui WhatsApp di bawah.</p></form>';
     const f = $('form', body);
     const eye = $('[data-eye]', f); if (eye) eye.onclick = () => { const i = $('[name=pass]', f); i.type = i.type === 'password' ? 'text' : 'password'; };
     f.onsubmit = async e => {
@@ -47,12 +48,13 @@ function showAuth(msg) {
         if (!/^62\d{8,13}$/.test(waNorm(fd.wa))) return err('Nomor WhatsApp tidak valid. Contoh: 081234567890');
         if (fd.pass.length < 6) return err('Kata sandi minimal 6 karakter.');
         if (fd.pass !== fd.pass2) return err('Ulangi kata sandi tidak sama.');
+        if (!String(fd.ref || '').trim()) return err('Kode referral wajib diisi.');
       }
       btn.disabled = true; btn.classList.add('busy');
       try {
-        const r = t === 'in' ? await rpc('bw_login', { p_id: fd.id, p_pass: fd.pass }) : await rpc('bw_register', { p_name: fd.name, p_wa: fd.wa, p_pass: fd.pass, p_jabatan: fd.jabatan || '' });
+        const r = t === 'in' ? await rpc('bw_login', { p_id: fd.id, p_pass: fd.pass }) : await rpc('bw_register', { p_name: fd.name, p_wa: fd.wa, p_pass: fd.pass, p_jabatan: fd.jabatan || '', p_ref: String(fd.ref || '').trim() });
         if (r.err) {
-          err({ notfound: 'Akun tidak ditemukan. Periksa nomor atau daftar akun baru.', pass: 'Kata sandi salah.', off: 'Akun dinonaktifkan. Hubungi admin.', locked: 'Terlalu banyak percobaan. Coba lagi 15 menit lagi.', taken: 'Nomor WhatsApp sudah terdaftar. Silakan masuk.', wa: 'Nomor WhatsApp tidak valid.', pass_: '', name: 'Nama terlalu pendek.' }[r.err] || r.err);
+          err({ notfound: 'Akun tidak ditemukan. Periksa nomor atau daftar akun baru.', pass: 'Kata sandi salah.', off: 'Akun dinonaktifkan. Hubungi admin.', locked: 'Terlalu banyak percobaan. Coba lagi 15 menit lagi.', taken: 'Nomor WhatsApp sudah terdaftar. Silakan masuk.', ref: 'Kode referral salah. Pendaftaran tidak dapat dilanjutkan.', wa: 'Nomor WhatsApp tidak valid.', pass_: '', name: 'Nama terlalu pendek.' }[r.err] || r.err);
           btn.disabled = false; btn.classList.remove('busy'); return;
         }
         S.token = r.token; S.user = r.user; lsSet('bw.token', r.token); lsSet('bw.user', r.user);
