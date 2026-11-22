@@ -195,6 +195,7 @@ const ICONS = {
   file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/>',
   send: '<path d="M21 3 10 14"/><path d="M21 3l-7 18-4-7-7-4 18-7Z"/>',
   tag: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11M14 13h4M14 16.5h4"/>',
+  org: '<rect x="9" y="3" width="6" height="4.5" rx="1"/><rect x="2.5" y="16.5" width="6" height="4.5" rx="1"/><rect x="9" y="16.5" width="6" height="4.5" rx="1"/><rect x="15.5" y="16.5" width="6" height="4.5" rx="1"/><path d="M12 7.5v9M5.5 16.5V12h13v4.5"/>',
   copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>'
 };
 const ic = (n, cls = '') => '<svg class="ic ' + cls + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[n] || '') + '</svg>';
@@ -285,6 +286,7 @@ function fieldHtml(f, v) {
     }
     case 'check': inp = '<label class="chk"><input type="checkbox" id="' + id + '" data-k="' + f.k + '"' + (val ? ' checked' : '') + dis + '><span>' + esc(f.text || '') + '</span></label>'; break;
     case 'html': inp = '<div class="fhtml" data-html="' + f.k + '">' + (f.html ? f.html(v) : '') + '</div>'; break;
+    case 'checks': { const sel = val || []; inp = '<div class="checks">' + optList(f.opts, v).map(o => '<label class="ck"><input type="checkbox" data-ck="' + f.k + '" value="' + esc(o.v) + '"' + (sel.includes(o.v) ? ' checked' : '') + '><span>' + esc(o.t) + '</span></label>').join('') + '</div>'; break; }
     case 'items': inp = itemsHtml(f, v); break;
     case 'list': inp = '<input id="' + id + '" data-k="' + f.k + '" list="dl_' + f.k + '" autocomplete="off" value="' + esc(val) + '"' + ph + req + dis + '><datalist id="dl_' + f.k + '">' + optList(f.opts, v).map(o => '<option value="' + esc(o.v) + '">').join('') + '</datalist>'; break;
     default: inp = '<input id="' + id + '" data-k="' + f.k + '" type="' + (f.type || 'text') + '" value="' + esc(val) + '"' + ph + req + dis + (f.type === 'tel' ? ' inputmode="tel"' : '') + (f.max ? ' maxlength="' + f.max + '"' : '') + ' autocomplete="off">';
@@ -336,6 +338,7 @@ function openForm({ title, sub, fields, value, onSave, onCancel, wide, small, sa
   form.addEventListener('change', async e => {
     const t = e.target;
     if (t.dataset.ik !== undefined) { const f = fields.find(x => x.k === t.closest('[data-items]').dataset.items); const row = v[f.k][+t.dataset.i]; row[t.dataset.ik] = t.dataset.num ? parseNum(t.value) : t.value; const c = f.cols.find(c => c.k === t.dataset.ik); if (c && c.onChange) { c.onChange(row, v); render(); } refreshHtml(); return; }
+    if (t.dataset.ck) { v[t.dataset.ck] = [...form.querySelectorAll('[data-ck="' + t.dataset.ck + '"]:checked')].map(x => x.value); refreshHtml(); return; }
     const k = t.dataset.k; if (!k) return;
     const f = fields.find(x => x.k === k);
     if (t.tagName === 'SELECT' && t.value === '__add' && f.add) {
