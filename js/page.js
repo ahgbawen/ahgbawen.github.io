@@ -79,5 +79,5 @@ async function editGate(area) {
 }
 const gated = (area, fn) => (...a) => editGate(area).then(ok => { if (ok) fn(...a); });
 async function editRelock() { EDITK.until = 0; try { await rpc('bw_edit_unlock', { p_token: S.token, p_pin: '', p_lock: true }); } catch { } toast('Kunci edit ditutup'); emit(); }
-const editBadge = area => '<div class="note lock' + (editOpen() ? ' open' : '') + '">' + ic('lock') + (editOpen() ? 'Kunci edit <b>terbuka</b> sampai ' + new Date(EDITK.until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + '. <button class="btn ghost sm" data-relock>Kunci sekarang</button>' : 'Mengubah ' + esc(area) + ' wajib memasukkan kata sandi edit.') + '</div>';
+const editBadge = () => editOpen() ? '<div class="note lock open">' + ic('lock') + 'Kunci edit <b>terbuka</b> sampai ' + new Date(EDITK.until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + '. <button class="btn ghost sm" data-relock>Kunci sekarang</button></div>' : '';
 function bindRelock(el) { const b = $('[data-relock]', el); if (b) b.onclick = e => { e.stopPropagation(); editRelock(); }; }
