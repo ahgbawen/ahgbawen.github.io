@@ -251,7 +251,7 @@ MODS.hpp = {
         $$('[data-kend]', el).forEach(b => b.onclick = () => HG(kendForm)(b.dataset.kend));
         const g = $('[data-gelar]', el); if (g) g.onclick = () => HG(gelarForm)();
         const zn = $('[data-zona]', el); if (zn) zn.onclick = () => HG(zonaForm)();
-        const jm = $('[data-jmf]', el); if (jm) jm.onclick = () => HG(jmfForm)(s.unit, s.prod);
+        const jm = $('[data-jmf]', el); if (jm) jm.onclick = () => jmfForm(s.unit, s.prod);
         bindRelock(el);
       }
     });

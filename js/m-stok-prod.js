@@ -170,10 +170,11 @@ MODS.prod = {
       actions: [{ id: 'so', t: 'SO / WO Baru', pri: true }, { id: 'real', t: 'Catat Produksi', icon: 'prod' }],
       on: { so: () => soForm(), real: () => realForm() },
       filter: s => s.tab === 'jmf' ? periodBar(Object.assign({}, s, { month: undefined })) : periodBar(s),
-      body: s => s.tab === 'so' ? soListHtml(s) : s.tab === 'bom' ? bomHtml(s) : jmfHtml(s),
+      body: s => s.tab === 'so' ? soListHtml(s) : s.tab === 'bom' ? bomHtml(s) : editBadge('Komposisi Jobmix') + jmfHtml(s),
       bind: (el, s) => {
         $$('[data-row]', el).forEach(tr => tr.onclick = () => s.tab === 'jmf' ? jmfForm(tr.dataset.row.split('|')[0], tr.dataset.row.split('|')[1]) : soDetail(tr.dataset.row));
         const ap = $('[data-addprod]', el); if (ap) ap.onclick = () => jmfForm(s.unit || 'AMP', null);
+        bindRelock(el);
       }
     });
   },
@@ -330,7 +331,8 @@ function jmfHtml(s) {
     { t: 'Bahan', f: p => rp(p.c.buaso.B), num: true }, { t: 'U + A + S + O', f: p => rp(p.c.buaso.U + p.c.buaso.A + p.c.buaso.S + p.c.buaso.O), num: true }, { t: 'HPP + Bunga', f: p => '<b>' + rp(p.c.hpp) + '</b>', num: true, raw: true },
     { t: 'Loco BC', f: p => rp(p.c.harga.bc), num: true }, { t: 'Internal', f: p => rp(p.c.harga.int), num: true }, { t: 'Eksternal', f: p => rp(p.c.harga.ext), num: true }], rows, { click: true }) + '</section>';
 }
-function jmfForm(u, n) {
+const jmfForm = gated('Komposisi Jobmix (BUASO)', (u, n) => jmfFormRaw(u, n));
+function jmfFormRaw(u, n) {
   const p = n ? productFind(u, n) : null;
   const v = p ? { unit: u, n: p.n, s: p.s, ext: p.h[2], b: p.b.map(l => ({ nama: l[0], komp: l[1], sat: l[2], koef: l[3], harga: l[4] })) } : { unit: u, n: '', s: { AMP: 'Ton', CMP: 'M3', SCP: 'Ton', PCP: 'Pcs' }[u], b: [] };
   const names = () => allMatNames().map(m => m.nama).concat(['Upah tenaga kerja', 'Maintenance & sparepart alat', 'Subkontraktor', 'Overhead & opex', 'Solar Industri - BBM alat produksi']);
