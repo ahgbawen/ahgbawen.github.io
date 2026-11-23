@@ -188,8 +188,8 @@ function plHtml(s) {
     const m = margin(t);
     const title = (ti + 1) + '. HARGA ' + TIER[t][1].toUpperCase() + ' - ' + h.sat.toUpperCase();
     if (u === 'PCP') {
-      html += '<h3 class="plh">' + esc(title) + '</h3><div class="tbl"><table class="pl"><thead><tr><th rowspan="2">No</th><th rowspan="2">Produk</th><th rowspan="2">Dimensi</th><th rowspan="2">HPP + Bunga</th><th rowspan="2">Harga BUASO</th><th rowspan="2">Harga Pasar</th><th rowspan="2" class="hl">Loco (dipakai)</th><th rowspan="2">Margin</th><th colspan="10">Terkirim (Franco on Truck)</th></tr><tr>' + zh + '</tr></thead><tbody>' +
-        prods.map((p, i) => { const r = plRow(u, p.n, t, s); if (!r) return ''; const [a, b] = pcpSplit(p.n); const f = s.ppn ? 1 + params().global.ppn : 1; const lr = locoRaw(r.c, t); return '<tr><td class="c">' + (i + 1) + '</td><td>' + esc(a) + '</td><td>' + esc(b) + '</td><td class="n">' + nf0.format(r.c.hpp) + '</td><td class="n">' + nf0.format(r.c.hpp / (1 - m) * f) + '</td><td class="n">' + (pasarOf(r.c) ? nf0.format(pasarOf(r.c) * f) : '-') + '</td><td class="n hl">' + nf0.format(r.loco) + '</td><td class="n">' + pct(lr ? (lr - r.c.hpp) / lr : 0) + '</td>' + r.franco.map(x => '<td class="n">' + nf0.format(x) + '</td>').join('') + '</tr>'; }).join('') + '</tbody></table></div>';
+      html += '<h3 class="plh">' + esc(title) + '</h3><div class="tbl"><table class="pl"><thead><tr><th rowspan="2">No</th><th rowspan="2">Produk</th><th rowspan="2">Dimensi</th><th rowspan="2" class="hl">Loco (dipakai)</th><th colspan="10">Terkirim (Franco on Truck)</th></tr><tr>' + zh + '</tr></thead><tbody>' +
+        prods.map((p, i) => { const r = plRow(u, p.n, t, s); if (!r) return ''; const [a, b] = pcpSplit(p.n); return '<tr><td class="c">' + (i + 1) + '</td><td>' + esc(a) + '</td><td>' + esc(b) + '</td><td class="n hl">' + nf0.format(r.loco) + '</td>' + r.franco.map(x => '<td class="n">' + nf0.format(x) + '</td>').join('') + '</tr>'; }).join('') + '</tbody></table></div>';
       return;
     }
     html += '<h3 class="plh">' + esc(title) + '</h3><div class="tbl"><table class="pl"><thead><tr><th rowspan="2">No</th><th rowspan="2">' + (u === 'CMP' ? 'Mutu Beton' : u === 'AMP' ? 'Jenis Hotmix' : 'Produk') + '</th>' + (u === 'CMP' ? '<th rowspan="2">fc (MPa)</th>' : '') + '<th rowspan="2" class="hl">Loco</th><th colspan="10">Terkirim (Franco on Truck)</th>' + (u === 'AMP' ? '<th colspan="10" class="tg">Tergelar</th>' : '') + '</tr><tr>' + zh + (u === 'AMP' ? zh.replace(/<th>/g, '<th class="tg">') : '') + '</tr></thead><tbody>' +
@@ -213,7 +213,7 @@ async function plReport(s) {
     const prods = products(u);
     if (u === 'PCP') {
       R.h2(title, h.ppnTxt);
-      R.table(['No', 'Produk', 'Dimensi', 'HPP+Bunga', 'Loco'].concat(zl), prods.map((p, i) => { const r = plRow(u, p.n, t, s); const [a, b] = pcpSplit(p.n); return [i + 1, a, b, R_(r.c.hpp), { content: R_(r.loco), styles: { fontStyle: 'bold' } }].concat(r.franco.map(R_)); }), { fs: 6.2, cs: Object.assign({}, cs, { 1: {}, 2: {} }) });
+      R.table(['No', 'Produk', 'Dimensi', 'Loco'].concat(zl), prods.map((p, i) => { const r = plRow(u, p.n, t, s); const [a, b] = pcpSplit(p.n); return [i + 1, a, b, { content: R_(r.loco), styles: { fontStyle: 'bold' } }].concat(r.franco.map(R_)); }), { fs: 6.2, cs: Object.assign({}, cs, { 1: {}, 2: {} }) });
       return;
     }
     const first = u === 'CMP' ? ['No', 'Mutu', 'fc', 'Loco'] : ['No', u === 'AMP' ? 'Jenis Hotmix' : 'Produk', 'Loco'];
