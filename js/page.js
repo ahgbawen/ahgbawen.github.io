@@ -53,3 +53,31 @@ function detail({ title, sub, html, buttons, wide = true, bind }) {
 const infoGrid = pairs => '<dl class="igrid">' + pairs.filter(Boolean).map(([k, v, raw]) => '<div><dt>' + esc(k) + '</dt><dd>' + (raw ? v : esc(v ?? '-')) + '</dd></div>').join('') + '</dl>';
 const statusTone = s => ({ 'Aman': 'ok', 'Menipis': 'warn', 'Habis': 'bad', 'Kosong': 'mute', 'Lunas': 'ok', 'Sebagian': 'warn', 'Belum dibayar': 'bad', 'Terealisasi': 'ok', 'Belum terealisasi': 'bad', 'Selesai': 'ok', 'Berjalan': 'info', 'Rencana': 'mute', 'Batal': 'mute', 'Terkirim': 'ok', 'Tunda': 'warn', 'Dilaporkan': 'bad', 'Dalam Perbaikan': 'info', 'Menunggu Sparepart': 'warn', 'Menang': 'ok', 'Kalah': 'mute', 'Negosiasi': 'warn', 'Penawaran': 'info', 'Prospek': 'mute', 'Usulan': 'mute', 'Disetujui': 'info', 'Ditunda': 'warn', 'Aktif': 'ok', 'Nonaktif': 'mute', 'Tinggi': 'bad', 'Sedang': 'warn', 'Rendah': 'mute' }[s] || '');
 const stChip = s => chip(s, statusTone(s));
+
+/* ---------- kunci edit (HPP & BUASO, Struktur Organisasi): kata sandi dicek di server, sesi terbuka 2 jam ---------- */
+const EDITK = { until: 0 };
+const editOpen = () => EDITK.until > Date.now();
+async function editGate(area) {
+  if (editOpen()) return true;
+  try { const r = await rpc('bw_edit_unlock', { p_token: S.token, p_pin: null }); if (r && r.ok) { EDITK.until = Date.parse(r.until) || Date.now() + 36e5; emit(); return true; } } catch { }
+  return new Promise(res => {
+    openForm({
+      title: 'Kata Sandi Edit', sub: 'Mengubah ' + area + ' wajib memasukkan kata sandi', small: true, value: {}, saveLabel: 'Buka kunci', onCancel: () => res(false),
+      fields: [{ k: 'pin', label: 'Kata sandi', type: 'password', req: true }],
+      onSave: async x => {
+        try {
+          const r = await rpc('bw_edit_unlock', { p_token: S.token, p_pin: String(x.pin) });
+          if (r.err === 'pin') { toast('Kata sandi salah', 'err'); return false; }
+          if (r.err === 'locked') { toast('Terlalu banyak percobaan. Coba lagi 15 menit lagi.', 'err'); return false; }
+          if (r.err) { toast('Gagal: ' + r.err, 'err'); return false; }
+          EDITK.until = Date.parse(r.until) || Date.now() + 36e5;
+          toast('Kunci edit terbuka'); setTimeout(() => { res(true); emit(); }, 300);
+        } catch (e) { toast('Tidak dapat terhubung ke server', 'err'); return false; }
+      }
+    });
+  });
+}
+const gated = (area, fn) => (...a) => editGate(area).then(ok => { if (ok) fn(...a); });
+async function editRelock() { EDITK.until = 0; try { await rpc('bw_edit_unlock', { p_token: S.token, p_pin: '', p_lock: true }); } catch { } toast('Kunci edit ditutup'); emit(); }
+const editBadge = area => '<div class="note lock' + (editOpen() ? ' open' : '') + '">' + ic('lock') + (editOpen() ? 'Kunci edit <b>terbuka</b> sampai ' + new Date(EDITK.until).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + '. <button class="btn ghost sm" data-relock>Kunci sekarang</button>' : 'Mengubah ' + esc(area) + ' wajib memasukkan kata sandi edit.') + '</div>';
+function bindRelock(el) { const b = $('[data-relock]', el); if (b) b.onclick = e => { e.stopPropagation(); editRelock(); }; }

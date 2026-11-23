@@ -107,13 +107,14 @@ MODS.mt = {
     const st = stateOf('mt', { tab: 'aktif', unit: '', q: '', month: '' });
     st.umum = true;
     return page(root, {
-      key: 'mt', st, report: s => s.tab === 'program' ? programReport(s) : mtReport(s),
-      tabs: [{ k: 'aktif', t: 'Perbaikan Aktif' }, { k: 'program', t: 'Program Perbaikan Basecamp' }, { k: 'semua', t: 'Riwayat' }],
+      key: 'mt', st, report: s => s.tab === 'program' ? programReport(s) : s.tab === 'ts' ? tsReport(s) : mtReport(s),
+      tabs: [{ k: 'aktif', t: 'Perbaikan Aktif' }, { k: 'program', t: 'Program Perbaikan Basecamp' }, { k: 'ts', t: 'Time Schedule' }, { k: 'semua', t: 'Riwayat' }],
       actions: [{ id: 'add', t: 'Laporkan Kerusakan', pri: true }],
       on: { add: () => mtForm() },
-      filter: s => periodBar(s),
+      filter: s => s.tab === 'ts' ? periodBar(Object.assign({}, s, { month: undefined }), null, '<select data-fk="tsSt"><option value="">Semua status</option><option value="aktif"' + (s.tsSt === 'aktif' ? ' selected' : '') + '>Belum selesai</option><option value="Selesai"' + (s.tsSt === 'Selesai' ? ' selected' : '') + '>Selesai</option></select>') : periodBar(s),
       body: s => {
         if (s.tab === 'program') return programHtml(s);
+        if (s.tab === 'ts') return tsHtml(s);
         const a = mtRows(s);
         const all_ = all('mt');
         return '<div class="kpis">' + kpi('Perbaikan aktif', all_.filter(m => m.status !== 'Selesai').length) + kpi('Lewat estimasi', all_.filter(m => mtLate(m)).length, '', all_.some(mtLate) ? 'bad' : '') + kpi('Menunggu sparepart', all_.filter(m => m.status === 'Menunggu Sparepart').length, '', 'warn') + kpi('Selesai bulan ini', all_.filter(m => m.status === 'Selesai' && inMonth(m.selesai, curMonth())).length, '', 'good') + '</div>' +
@@ -126,7 +127,7 @@ MODS.mt = {
             { t: 'Status', f: m => stChip(m.status || 'Dilaporkan'), raw: true }
           ], a, { click: true, empty: s.tab === 'aktif' ? 'Tidak ada perbaikan aktif. Semua alat beroperasi normal.' : 'Belum ada riwayat maintenance.', emptyIcon: 'mt' }) + '</section>';
       },
-      bind: el => { $$('[data-row]', el).forEach(tr => tr.onclick = () => mtForm(get(tr.dataset.row.split(':')[0]))); $$('[data-prog]', el).forEach(b => b.onclick = () => mtForm(null, { program: b.dataset.prog, unit: b.dataset.u, jenis: 'Perbaikan', status: 'Dalam Perbaikan' })); $$('[data-jmulai]', el).forEach(b => b.onclick = () => jadwalMulaiDialog(b.dataset.jmulai)); }
+      bind: el => { $$('[data-row]', el).forEach(tr => tr.onclick = () => mtForm(get(tr.dataset.row.split(':')[0]))); $$('[data-prog]', el).forEach(b => b.onclick = () => mtForm(null, { program: b.dataset.prog, unit: b.dataset.u, jenis: 'Perbaikan', status: 'Dalam Perbaikan' })); $$('[data-jmulai]', el).forEach(b => b.onclick = e => { e.stopPropagation(); jadwalMulaiDialog(b.dataset.jmulai); }); }
     });
   },
   summary() { const a = all('mt').filter(m => m.status !== 'Selesai'); const l = a.filter(mtLate).length; return { main: a.length + ' perbaikan aktif', sub: l ? l + ' lewat estimasi' : 'Tidak ada yang terlambat', tone: l ? 'warn' : '' }; }
@@ -504,5 +505,107 @@ async function bppbReport(s) {
     R.table(['No. BPPB', 'Unit', 'Barang', 'Satuan', 'Diminta', 'Terealisasi', 'Sisa'], body, { fs: 7.4 });
   }
   R.sign();
+  await R.save();
+}
+
+/* ---------- Time Schedule: semua pekerjaan perbaikan dalam satu garis waktu (hari ke-1 s/d selesai), per unit ---------- */
+const TS_COL = { AMP: [38, 52, 69], CMP: [31, 95, 174], SCP: [138, 90, 43], PCP: [36, 117, 107], Umum: [106, 118, 134] };
+const tsHex = u => '#' + (TS_COL[u] || TS_COL.Umum).map(v => v.toString(16).padStart(2, '0')).join('');
+function tsSegs(d) { const out = []; for (let i = 0; i < d.length;) { let j = i; while (j + 1 < d.length && d[j + 1] === d[j] + 1) j++; out.push([d[i], d[j]]); i = j + 1; } return out; }
+function tsData(s) {
+  const mts = all('mt');
+  const pStart = {}; mts.forEach(m => { if (m.program && m.jadwalMulai && (!pStart[m.program] || m.jadwalMulai < pStart[m.program])) pStart[m.program] = m.jadwalMulai; });
+  const src = mts.filter(m => (m.program ? progKerja(m) : m.status !== 'Selesai') && (!s.unit || m.unit === s.unit) && qMatch(s.q, m.program, m.alat, m.kerusakan, m.tenaga, m.pic));
+  const anchors = Object.values(pStart).concat(src.filter(m => !m.program && m.tgl).map(m => m.tgl)).sort();
+  const T0 = anchors[0] || '';
+  const rows = src.map(m => {
+    const base = m.program ? pStart[m.program] || '' : m.tgl || '';
+    const off = T0 && base ? daysBetween(T0, base) : 0;
+    const d = jdDays(m);
+    let segs = [], kind = m.trial ? 'trial' : 'plan';
+    if (d.length) segs = tsSegs(d).map(([a, b]) => [a + off, b + off]);
+    else if (!m.trial) {
+      kind = 'est';
+      let len = Math.max(1, Math.ceil(+m.estHari || 1));
+      if (!m.program && m.status === 'Selesai' && m.selesai && base) len = Math.max(1, daysBetween(base, m.selesai) + 1);
+      segs = [[off + 1, off + len]];
+    }
+    return { m, base, off, segs, kind, dated: !!(T0 && base) };
+  });
+  /* trial tanpa hari: dijadwalkan sehari setelah pekerjaan terakhir programnya */
+  rows.filter(r => !r.segs.length).forEach(r => { const mx = Math.max(r.off, ...rows.filter(x => x.m.program === r.m.program && x.segs.length).map(x => x.segs[x.segs.length - 1][1])); r.segs = [[mx + 1, mx + 1]]; });
+  rows.forEach(r => {
+    r.a = r.segs[0][0]; r.b = r.segs[r.segs.length - 1][1]; r.dur = sum(r.segs, g => g[1] - g[0] + 1);
+    r.late = r.m.status !== 'Selesai' && r.dated && addDays(T0, r.b - 1) < today();
+  });
+  const fil = rows.filter(r => !s.tsSt || (s.tsSt === 'Selesai' ? r.m.status === 'Selesai' : r.m.status !== 'Selesai'));
+  const N = Math.max(14, ...fil.map(r => r.b));
+  const ord = r => (inJadwal(r.m) ? 0 : 1) * 1e6 + (+r.m.urut || 999) * 1e3 + r.a;
+  const units = UNITS.concat('Umum').filter(u => (!s.unit || s.unit === u) && (u !== 'Umum' || fil.some(r => r.m.unit === u))).map(u => {
+    const list = fil.filter(r => r.m.unit === u);
+    const progs = [...new Set(list.map(r => r.m.program || ''))].sort((a, b) => !a ? 1 : !b ? -1 : a.localeCompare(b)).map(p => ({ nama: p, rows: list.filter(r => (r.m.program || '') === p).sort((x, y) => ord(x) - ord(y) || String(x.m.kerusakan).localeCompare(String(y.m.kerusakan))) }));
+    const work = list.filter(r => r.kind !== 'trial'), tot = sum(work, 'dur');
+    return { u, list, progs, a: list.length ? Math.min(...list.map(r => r.a)) : 0, b: list.length ? Math.max(...list.map(r => r.b)) : 0, real: tot ? sum(work.filter(r => r.m.status === 'Selesai'), 'dur') / tot : 0 };
+  });
+  return { T0, N, rows: fil, units, pStart };
+}
+const tsDate = (T, i) => T.T0 ? addDays(T.T0, i - 1) : '';
+const tsPos = (T, a, b) => 'left:' + ((a - 1) / T.N * 100).toFixed(3) + '%;width:' + ((b - a + 1) / T.N * 100).toFixed(3) + '%';
+function tsNow(T) { if (!T.T0) return ''; const i = daysBetween(T.T0, today()) + 1; return i >= 1 && i <= T.N ? '<s class="now" style="left:' + ((i - 0.5) / T.N * 100).toFixed(3) + '%"></s>' : ''; }
+function tsBars(T, r) {
+  const c = tsHex(r.m.unit), done = r.m.status === 'Selesai';
+  const tip = esc(r.m.kerusakan + ' · hari ke-' + jdText(r.segs.flatMap(([a, b]) => Array.from({ length: b - a + 1 }, (_, k) => a + k))) + ' (' + r.dur + ' hari)' + (r.dated ? ' · ' + tgl(tsDate(T, r.a)) + ' s/d ' + tgl(tsDate(T, r.b)) : '') + (r.kind === 'est' ? ' · perkiraan' : ''));
+  let h = '';
+  for (let i = 1; i < r.segs.length; i++) h += '<b class="gap" style="--c:' + c + ';' + tsPos(T, r.segs[i - 1][1] + 1, r.segs[i][0] - 1) + '"></b>';
+  return h + r.segs.map(([a, b]) => '<i class="bar k-' + r.kind + (done ? ' done' : '') + (r.late ? ' late' : '') + '" style="--c:' + c + ';' + tsPos(T, a, b) + '" title="' + tip + '">' + (b - a + 1 >= 2 ? (a === b ? a : a + '–' + b) : '') + '</i>').join('');
+}
+function tsHtml(s) {
+  const T = tsData(s);
+  const late = T.rows.filter(r => r.late).length;
+  const dm = i => { const d = tsDate(T, i); return d ? '<small>' + d.slice(8, 10) + '</small>' : ''; };
+  const head = '<thead><tr><th class="c">No</th><th>Pekerjaan perbaikan</th><th>Tenaga / PIC</th><th>Mulai</th><th>Selesai</th><th class="n">Durasi</th><th>Status</th><th class="tlh"><div class="tlx hd">' + Array.from({ length: T.N }, (_, k) => '<span' + (T.T0 ? ' title="' + tgl(tsDate(T, k + 1)) + '"' : '') + '>' + (k + 1) + dm(k + 1) + '</span>').join('') + '</div></th></tr></thead>';
+  const day = (r, i) => 'Hari ke-' + i + (r.dated ? '<small>' + tgl(tsDate(T, i)) + '</small>' : '');
+  let no = 0;
+  const body = T.units.map(U => {
+    const c = tsHex(U.u);
+    let h = '<tr class="tsu"><td colspan="7"><div class="tsuh">' + unitChip(U.u) + '<b>' + esc(UNIT_NAME[U.u] || U.u) + '</b><small>' + (U.list.length ? U.list.length + ' pekerjaan · hari ke-' + U.a + ' s/d ' + U.b + ' (' + (U.b - U.a + 1) + ' hari) · realisasi ' + jdPct(U.real) : 'Belum ada pekerjaan perbaikan') + '</small></div></td><td class="tl"><div class="tlx">' + (U.list.length ? '<i class="sum" style="--c:' + c + ';' + tsPos(T, U.a, U.b) + '"></i>' : '') + (U.list.some(r => r.dated) ? tsNow(T) : '') + '</div></td></tr>';
+    U.progs.forEach(P => {
+      if (U.progs.length > 1 || P.nama) h += '<tr class="tsp"><td></td><td colspan="6"><span>' + esc(P.nama || 'Di luar program (laporan kerusakan)') + '</span>' + (P.nama ? ' <button class="btn ghost sm" data-jmulai="' + esc(P.nama) + '">' + ic('cal') + (T.pStart[P.nama] ? 'Hari ke-1: ' + tgl(T.pStart[P.nama]) : 'Atur hari ke-1') + '</button>' : '') + '</td><td class="tl"><div class="tlx">' + (T.pStart[P.nama] || !P.nama ? tsNow(T) : '') + '</div></td></tr>';
+      h += P.rows.map(r => '<tr class="click' + (r.m.status === 'Selesai' ? ' done' : '') + '" data-row="' + esc(r.m.id) + '"><td class="c">' + (++no) + '</td><td class="wrap strong tsn"' + (r.m.jadwalKet ? ' title="' + esc(r.m.jadwalKet) + '"' : '') + '>' + esc(r.m.kerusakan) + '<small>' + esc(r.m.alat || '') + (r.kind === 'est' ? ' · perkiraan' + (r.m.jadwalKet ? ' (subkon)' : '') : r.kind === 'trial' ? ' · trial produksi' : '') + '</small></td><td>' + esc(r.m.tenaga || r.m.pic || '-') + '</td><td>' + day(r, r.a) + '</td><td' + (r.late ? ' class="t-bad"' : '') + '>' + day(r, r.b) + '</td><td class="n">' + r.dur + ' hari' + (r.b - r.a + 1 > r.dur ? '<small>rentang ' + (r.b - r.a + 1) + ' hari</small>' : '') + '</td><td>' + stChip(r.m.status || 'Dilaporkan') + '</td><td class="tl"><div class="tlx">' + tsBars(T, r) + (r.dated ? tsNow(T) : '') + '</div></td></tr>').join('');
+    });
+    return h;
+  }).join('');
+  return '<div class="kpis">' + kpi('Pekerjaan perbaikan', T.rows.length, UNITS.map(u => u + ' ' + T.rows.filter(r => r.m.unit === u).length).join(' · ')) + kpi('Rentang jadwal', 'Hari ke-1 s/d ' + T.N, T.N + ' hari') + kpi('Hari ke-1', T.T0 ? tgl(T.T0) : 'Belum diatur', T.T0 ? 'selesai ' + tgl(tsDate(T, T.N)) : 'setelah material datang') + kpi('Lewat target', late, '', late ? 'bad' : 'good') + '</div>' +
+    '<section class="card"><div class="chead"><h3>Time Schedule Perbaikan Basecamp Bawen</h3><div class="tsleg"><span><i class="bar k-plan" style="--c:#263445"></i>Terjadwal</span><span><i class="bar k-est" style="--c:#263445"></i>Perkiraan</span><span><i class="bar k-trial" style="--c:#263445"></i>Trial</span><span><i class="bar done"></i>Selesai</span><span><i class="bar late" style="--c:#263445"></i>Lewat target</span>' + (T.T0 ? '<span><s class="now"></s>Hari ini</span>' : '') + '</div></div>' +
+    '<div class="note">Semua pekerjaan perbaikan dalam satu garis waktu, dikelompokkan per unit. Garis = hari ke- mulai sampai selesai; pekerjaan tanpa hari ke- memakai estimasi lama perbaikan dari hari ke-1. Klik baris untuk mengubah hari ke-, estimasi, atau status.' + (T.T0 && T.units.some(U => U.progs.some(P => P.nama && !T.pStart[P.nama])) ? ' Program yang belum diatur hari ke-1 dianggap mulai bersamaan (tanggal belum pasti).' : '') + '</div>' +
+    (T.rows.length ? '<div class="tbl ts"><table style="--n:' + T.N + '">' + head + '<tbody>' + body + '</tbody></table></div>' : '<div class="empty">' + ic('mt') + '<p>Belum ada pekerjaan perbaikan.</p></div>') + '</section>';
+}
+async function tsReport(s) {
+  const T = tsData(s);
+  const R = await pdfReport({ title: 'Time Schedule Perbaikan Basecamp Bawen', sub: (s.unit ? UNIT_NAME[s.unit] : 'AMP, CMP, SCP, PCP') + ' · per ' + tgl(today(), true), orient: 'l', fname: 'Time_Schedule_Perbaikan_Bawen' });
+  R.kv([['Pekerjaan', String(T.rows.length)], ['Rentang', 'Hari ke-1 s/d ' + T.N + ' (' + T.N + ' hari)'], ['Hari ke-1', T.T0 ? tgl(T.T0, true) : 'Belum diatur (setelah material datang)'], ['Lewat target', String(T.rows.filter(r => r.late).length), T.rows.some(r => r.late) ? 'red' : '']]);
+  R.h2('Rekap per unit');
+  R.table(['Unit', 'Pekerjaan', 'Mulai', 'Selesai', 'Rentang', 'Realisasi'], T.units.map(U => [U.u + ' - ' + (UNIT_NAME[U.u] || U.u), String(U.list.length), U.list.length ? 'Hari ke-' + U.a + (T.T0 ? ' (' + tgl(tsDate(T, U.a)) + ')' : '') : '-', U.list.length ? 'Hari ke-' + U.b + (T.T0 ? ' (' + tgl(tsDate(T, U.b)) + ')' : '') : '-', U.list.length ? (U.b - U.a + 1) + ' hari' : '-', U.list.length ? jdPct(U.real) : '-']), { fs: 7.6 });
+  const days = Array.from({ length: T.N }, (_, i) => i + 1), light = (c, k) => c.map(v => Math.round(v + (255 - v) * k));
+  const cs = { 0: { cellWidth: 7, halign: 'center' }, 1: { cellWidth: 52 }, 2: { cellWidth: 24 }, 3: { cellWidth: 13, halign: 'center' }, 4: { cellWidth: 13, halign: 'center' }, 5: { cellWidth: 11, halign: 'center' } };
+  const dw = Math.min(8, 154 / T.N); days.forEach(i => cs[i + 5] = { cellWidth: dw, halign: 'center' });
+  T.units.forEach(U => {
+    if (!U.list.length && s.unit !== U.u && U.u !== 'PCP') return;
+    R.h2(U.u + ' — ' + (UNIT_NAME[U.u] || U.u), U.list.length ? 'Hari ke-' + U.a + ' s/d ' + U.b + ' · realisasi ' + jdPct(U.real) : 'Belum ada pekerjaan');
+    if (!U.list.length) return;
+    const col = TS_COL[U.u] || TS_COL.Umum;
+    let no = 0; const body = [];
+    U.progs.forEach(P => {
+      if (U.progs.length > 1 || P.nama) body.push([{ content: (P.nama || 'Di luar program') + (T.pStart[P.nama] ? ' · hari ke-1 ' + tgl(T.pStart[P.nama]) : ''), colSpan: 6 + T.N, styles: { fontStyle: 'bold', halign: 'left', fillColor: [236, 240, 245] } }]);
+      P.rows.forEach(r => {
+        const on = new Set(r.segs.flatMap(([a, b]) => Array.from({ length: b - a + 1 }, (_, k) => a + k)));
+        const fc = r.m.status === 'Selesai' ? [31, 157, 85] : r.kind === 'trial' ? light(col, 0.75) : r.kind === 'est' ? light(col, 0.5) : col;
+        body.push([String(++no), r.m.kerusakan + (r.kind === 'est' ? ' (perkiraan)' : ''), r.m.tenaga || r.m.pic || '-', String(r.a), String(r.b), r.dur + ' hr'].concat(days.map(i => on.has(i) ? { content: '', styles: { fillColor: fc } } : '')));
+      });
+    });
+    R.table(['No', 'Pekerjaan', 'Tenaga', 'Mulai', 'Selesai', 'Durasi'].concat(days.map(i => T.T0 ? i + '\n' + jdDm(tsDate(T, i)) : String(i))), body, { fs: 6.6, cs });
+  });
+  R.para('Mulai/Selesai = hari ke-. Warna penuh = terjadwal, warna muda = perkiraan dari estimasi lama perbaikan, hijau = selesai.', 7.6);
+  R.sign([['Dibuat oleh,', S.user.name], ['Kepala Mekanik,', ''], ['Kepala Basecamp,', '']]);
   await R.save();
 }

@@ -95,15 +95,17 @@ function emit() { S.ver = (S.ver || 0) + 1; S.listeners.forEach(f => { try { f()
 async function syncNow(full) {
   if (!S.token || S.syncing) return;
   S.syncing = true;
+  let changed0 = false;
   try {
     if (S.queue.length) {
       const batch = S.queue.slice(0, 200);
       const r = await rpc('bw_put', { p_token: S.token, p_docs: batch.map(q => ({ id: q.id, kind: q.kind, data: q.data, del: !!q.del })) });
       if (r && r.err === 'auth') return authLost();
-      if (r && r.ok) { S.queue = S.queue.slice(batch.length); }
+      if (r && r.rej && r.rej.length) { r.rej.forEach(id => S.docs.delete(id)); full = true; changed0 = true; toast(r.rej.length + ' perubahan ditolak: perlu kata sandi edit', 'err'); EDITK.until = 0; }
+      if (r && !r.err) { S.queue = S.queue.slice(batch.length); }
       else if (r && r.err) { toast('Data ditolak server (' + r.err + ')', 'err'); S.queue = S.queue.slice(batch.length); }
     }
-    let changed = false, more = true, guard = 0;
+    let changed = changed0, more = true, guard = 0;
     while (more && guard++ < 20) {
       const r = await rpc('bw_sync', { p_token: S.token, p_since: full ? 0 : S.seq });
       if (r && r.err === 'auth') return authLost();

@@ -56,7 +56,7 @@ MODS.org = {
       actions: [{ id: 'add', t: 'Tambah Posisi', pri: true }],
       on: { add: () => orgForm(null, { atasan: 'kp' }) },
       filter: s => s.tab === 'bagan' ? '' : periodBar(Object.assign({}, s, { month: undefined })),
-      body: s => orgHtml(s),
+      body: s => editBadge('Struktur Organisasi') + orgHtml(s),
       bind: (el) => {
         $$('[data-oid]', el).forEach(n => {
           n.onclick = () => orgForm(orgFind(n.dataset.oid));
@@ -64,6 +64,7 @@ MODS.org = {
           n.onmouseleave = () => $$('[data-oid]', el).forEach(x => x.classList.remove('kor', 'focus'));
         });
         $$('[data-row]', el).forEach(tr => tr.onclick = () => orgForm(orgFind(tr.dataset.row)));
+        bindRelock(el);
         const oc = $('.orgc', el), ot = $('.otree', el);
         if (oc && ot) {
           const st = stateOf('org', {});
@@ -71,7 +72,7 @@ MODS.org = {
           apply();
           $$('[data-oz]', el).forEach(b => b.onclick = () => { const cur = parseFloat(ot.style.zoom) || 1, k = b.dataset.oz; st.zoom = k === 'fit' ? 'fit' : k === '1' ? 1 : Math.max(0.4, Math.min(1.4, cur + (k === '+' ? 0.1 : -0.1))); apply(); });
         }
-        const rs = $('[data-orgreset]', el); if (rs) rs.onclick = async () => { if (await confirmBox('Kembalikan struktur', 'Struktur dikembalikan ke susunan standar. Nama personil yang sudah diisi akan hilang.', 'Kembalikan', true)) { remove(ORG_ID); toast('Struktur dikembalikan ke standar'); } };
+        const rs = $('[data-orgreset]', el); if (rs) rs.onclick = async e => { e.stopPropagation(); if (await editGate('Struktur Organisasi') && await confirmBox('Kembalikan struktur', 'Struktur dikembalikan ke susunan standar. Nama personil yang sudah diisi akan hilang.', 'Kembalikan', true)) { remove(ORG_ID); toast('Struktur dikembalikan ke standar'); } };
       }
     });
   },
@@ -113,7 +114,8 @@ function orgHtml(s) {
       (orgKids(list, r.id).length ? '<div class="ocols">' + orgKids(list, r.id).map(c => '<div class="ocol">' + orgNode(c, list, 'l2') + orgSub(list, c.id) + '</div>').join('') + '</div>' : '') + '</div>').join('') + '</div></section>' +
     '<div class="legend"><span><i style="background:var(--navy)"></i>Pimpinan</span><span><i style="background:#263445"></i>AMP</span><span><i style="background:#1f5fae"></i>CMP</span><span><i style="background:#8a5a2b"></i>SCP</span><span><i style="background:#24756b"></i>PCP</span><span><i style="background:#6a7686"></i>Umum / pendukung</span></div>';
 }
-function orgForm(p, pre) {
+const orgForm = gated('Struktur Organisasi', (p, pre) => orgFormRaw(p, pre));
+function orgFormRaw(p, pre) {
   const list = orgPos();
   const isNew = !p;
   const v = p ? JSON.parse(JSON.stringify(p)) : Object.assign({ id: uid('og'), jabatan: '', unit: 'Umum', atasan: 'kp', formasi: 1, kor: [], orang: [{}], tugas: '', urut: list.length + 1 }, pre || {});

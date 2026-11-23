@@ -230,6 +230,7 @@ async function plReport(s) {
 }
 
 /* =================== 14. HPP & BUASO =================== */
+const HG = fn => gated('HPP & BUASO', fn);
 MODS.hpp = {
   title: 'HPP & BUASO', icon: 'scale', desc: 'Parameter, biaya harian, BUASO dan BOM penyusun HPP serta price list',
   render(root) {
@@ -239,18 +240,19 @@ MODS.hpp = {
       key: 'hpp', st, report: hppReport,
       tabs: [{ k: 'rekap', t: 'Rekap HPP' }, { k: 'rinci', t: 'Rincian BUASO & BOM' }, { k: 'param', t: 'Parameter & Biaya Harian' }, { k: 'ongkir', t: 'Ongkos Gendong & Gelar' }],
       actions: [{ id: 'g', t: 'Parameter Umum', icon: 'edit' }, { id: 'pl', t: 'Lihat Price List', icon: 'tag' }],
-      on: { g: () => paramGlobalForm(), pl: () => { location.hash = '#/pl'; } },
+      on: { g: () => HG(paramGlobalForm)(), pl: () => { location.hash = '#/pl'; } },
       filter: s => (s.tab === 'ongkir' ? '' : '<div class="fbar"><div class="seg" data-ps="unit">' + UNITS.map(u => '<button class="' + (s.unit === u ? 'on' : '') + '" data-v="' + u + '">' + u + ' · ' + UNIT_PROD[u] + '</button>').join('') + '</div>' +
         (s.tab === 'rinci' ? '<select data-fk="prod">' + products(s.unit).map(p => '<option' + (s.prod === p.n ? ' selected' : '') + '>' + esc(p.n) + '</option>').join('') + '</select>' : s.tab === 'rekap' ? '<div class="sbox">' + ic('search') + '<input type="search" placeholder="Cari produk…" value="' + esc(s.q || '') + '" data-fk="q"></div>' : '') + '</div>'),
       bindFilter: (el, s, redraw) => $$('[data-ps] button', el).forEach(b => b.onclick = () => { s.unit = b.dataset.v; s.prod = ''; persist('hpp'); redraw(); }),
-      body: s => hppHtml(s),
+      body: s => editBadge('HPP & BUASO') + hppHtml(s),
       bind: (el, s, fill) => {
         $$('[data-row]', el).forEach(tr => tr.onclick = () => { s.tab = 'rinci'; s.prod = tr.dataset.row; MODS.hpp.render($('#main')); });
-        $$('[data-ed]', el).forEach(b => b.onclick = () => paramUnitForm(s.unit, b.dataset.ed));
-        $$('[data-kend]', el).forEach(b => b.onclick = () => kendForm(b.dataset.kend));
-        const g = $('[data-gelar]', el); if (g) g.onclick = () => gelarForm();
-        const zn = $('[data-zona]', el); if (zn) zn.onclick = () => zonaForm();
-        const jm = $('[data-jmf]', el); if (jm) jm.onclick = () => jmfForm(s.unit, s.prod);
+        $$('[data-ed]', el).forEach(b => b.onclick = () => HG(paramUnitForm)(s.unit, b.dataset.ed));
+        $$('[data-kend]', el).forEach(b => b.onclick = () => HG(kendForm)(b.dataset.kend));
+        const g = $('[data-gelar]', el); if (g) g.onclick = () => HG(gelarForm)();
+        const zn = $('[data-zona]', el); if (zn) zn.onclick = () => HG(zonaForm)();
+        const jm = $('[data-jmf]', el); if (jm) jm.onclick = () => HG(jmfForm)(s.unit, s.prod);
+        bindRelock(el);
       }
     });
   },
